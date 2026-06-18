@@ -58,7 +58,7 @@ async function callRailway(query) {
 }
 
 // API: full dashboard data
-app.get('/api/dashboard', async (req, res) => {
+app.get(['/api/dashboard', '/api/data'], async (req, res) => {
   const data = {
     timestamp: new Date().toISOString(),
     pipeline: { cold: 0, emailed: 0, replied: 0, demo: 0, customer: 0 },
@@ -169,6 +169,9 @@ app.get('/api/dashboard', async (req, res) => {
 
   res.json(data);
 });
+
+// Alias /api/data → /api/dashboard for frontend
+app.get('/api/data', (req, res, next) => { req.url = '/api/dashboard'; next('route'); });
 
 // API: Railway service status
 app.get('/api/services', async (req, res) => {
