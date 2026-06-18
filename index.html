@@ -865,26 +865,20 @@ async function startScrape() {
   if (statsEl) statsEl.textContent = '';
 
   try {
-    logScrape('📡 Fetching page via CORS proxy...', 'var(--text)');
+    logScrape('📡 Fetching page through server proxy...', 'var(--text)');
 
-    // Use allorigins CORS proxy — free, no key needed
-    const proxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url);
-    let html = '';
+    // Our server fetches the page (avoids browser CORS restrictions)
+    const proxyRes = await fetch('/api/fetch-page', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url })
+    });
 
-    try {
-      const r = await fetch(proxyUrl);
-      if (!r.ok) throw new Error('Proxy returned ' + r.status);
-      html = await r.text();
-      logScrape('✓ Page loaded (' + Math.round(html.length/1000) + 'KB)', 'var(--green)');
-    } catch(e) {
-      // Fallback proxy
-      logScrape('⚠ Primary proxy failed, trying fallback...', 'var(--amber)');
-      const r2 = await fetch('https://corsproxy.io/?' + encodeURIComponent(url));
-      if (!r2.ok) throw new Error('Both proxies failed — try a different URL');
-      html = await r2.text();
-      logScrape('✓ Page loaded via fallback (' + Math.round(html.length/1000) + 'KB)', 'var(--green)');
-    }
+    const proxyData = await proxyRes.json();
+    if (proxyData.error) throw new Error(proxyData.error);
 
+    const html = proxyData.html;
+    logScrape('✓ Page loaded via ' + proxyData.method + ' (' + Math.round(html.length/1000) + 'KB)', 'var(--green)');
     logScrape('🤖 AI extracting contacts...', 'var(--muted)');
 
     // Send to server for Claude extraction

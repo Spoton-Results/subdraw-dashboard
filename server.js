@@ -304,8 +304,60 @@ app.get('/api/events/recent', (req, res) => {
 
 
 // ── URL SCRAPER ────────────────────────────────────────────────────────────
-// Browser fetches the page, sends HTML here, Claude extracts contacts
-// Railway can't scrape external sites — browser does the fetch instead
+// /api/fetch-page: server-side proxy — browser asks our server to fetch the URL
+// Uses ScraperAPI free tier (1000/mo free) if SCRAPER_API_KEY is set
+// Falls back to direct fetch with browser headers
+
+app.post('/api/fetch-page', async (req, res) => {
+  const { url } = req.body;
+  if (!url) return res.status(400).json({ error: 'URL required' });
+  
+  try {
+    const fetch2 = (await import('node-fetch')).default;
+    let html = '';
+    let method = '';
+
+    // Try ScraperAPI first if key is set (bypasses all blocks)
+    if (process.env.SCRAPER_API_KEY) {
+      const scraperUrl = 'http://api.scraperapi.com?api_key=' + process.env.SCRAPER_API_KEY + '&url=' + encodeURIComponent(url);
+      const r = await fetch2(scraperUrl, { timeout: 30000 });
+      if (r.ok) { html = await r.text(); method = 'scraperapi'; }
+    }
+
+    // Direct fetch with rotating browser headers
+    if (!html) {
+      const userAgents = [
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      ];
+      const ua = userAgents[Math.floor(Math.random() * userAgents.length)];
+      const r = await fetch2(url, {
+        headers: {
+          'User-Agent': ua,
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Accept-Encoding': 'gzip, deflate, br',
+          'Connection': 'keep-alive',
+          'Upgrade-Insecure-Requests': '1',
+          'Sec-Fetch-Dest': 'document',
+          'Sec-Fetch-Mode': 'navigate',
+          'Cache-Control': 'no-cache',
+        },
+        redirect: 'follow',
+        timeout: 20000
+      });
+      if (r.ok) { html = await r.text(); method = 'direct'; }
+      else { return res.status(r.status).json({ error: 'Site returned ' + r.status + '. Try ScraperAPI key for blocked sites.' }); }
+    }
+
+    res.json({ html, method, length: html.length });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Browser-friendly note about Railway network
 
 app.post('/api/extract-contacts', async (req, res) => {
   const { html, url } = req.body;
