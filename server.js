@@ -199,6 +199,109 @@ app.get('/', (req, res) => res.sendFile(__dirname + '/index.html'));
 
 app.listen(port, () => console.log('SubDraw Dashboard running on port ' + port));
 
+
+// ── REAL-TIME WEBHOOK ──────────────────────────────────────────────────────
+// Receives events from GHL and Instantly — updates live state
+// Register this URL in GHL: Settings → Webhooks → https://dashboard-production-f04a.up.railway.app/webhook/ghl
+// Register in Instantly: Settings → Webhooks → https://dashboard-production-f04a.up.railway.app/webhook/instantly
+
+const liveEvents = []; // Ring buffer of last 50 events
+const MAX_EVENTS = 50;
+
+function pushEvent(source, type, data) {
+  const event = { ts: new Date().toISOString(), source, type, data };
+  liveEvents.unshift(event);
+  if (liveEvents.length > MAX_EVENTS) liveEvents.pop();
+  console.log('[Webhook]', source, type, JSON.stringify(data).substring(0, 100));
+}
+
+// GHL Webhook — fires on contact updates, SMS, pipeline changes, opportunities
+app.post('/webhook/ghl', (req, res) => {
+  res.sendStatus(200); // Acknowledge immediately
+  const body = req.body || {};
+  const type = body.type || body.event || 'unknown';
+  
+  // Parse meaningful events
+  if (type.includes('ContactCreate') || type.includes('contact.create')) {
+    pushEvent('ghl', 'new_lead', { name: body.contact?.name || body.firstName, company: body.contact?.companyName });
+  } else if (type.includes('SMS') || type.includes('sms')) {
+    pushEvent('ghl', 'sms', { direction: body.direction, contact: body.contact?.name, body: (body.body || '').substring(0, 80) });
+  } else if (type.includes('OpportunityStage') || type.includes('opportunity.stageUpdate')) {
+    pushEvent('ghl', 'stage_change', { contact: body.contact?.name, stage: body.pipelineStage?.name || body.stage });
+  } else if (type.includes('NoteCreate') || type.includes('TaskCreate')) {
+    pushEvent('ghl', 'activity', { type, contact: body.contact?.name });
+  } else if (type.includes('OutboundMessage') || type.includes('InboundMessage')) {
+    pushEvent('ghl', type.includes('Inbound') ? 'reply' : 'outbound', { 
+      channel: body.messageType || body.type,
+      contact: body.contact?.name,
+      body: (body.body || body.message || '').substring(0, 80)
+    });
+  } else {
+    pushEvent('ghl', type, { raw: JSON.stringify(body).substring(0, 100) });
+  }
+});
+
+// Instantly Webhook — fires on email opens, replies, bounces, campaign events
+app.post('/webhook/instantly', (req, res) => {
+  res.sendStatus(200);
+  const body = req.body || {};
+  const event = body.event_type || body.type || 'unknown';
+
+  if (event.includes('replied') || event.includes('reply')) {
+    pushEvent('instantly', 'reply', { email: body.lead_email, subject: body.subject?.substring(0, 60) });
+  } else if (event.includes('opened') || event.includes('open')) {
+    pushEvent('instantly', 'open', { email: body.lead_email, campaign: body.campaign_name });
+  } else if (event.includes('bounced') || event.includes('bounce')) {
+    pushEvent('instantly', 'bounce', { email: body.lead_email });
+  } else if (event.includes('unsubscribed')) {
+    pushEvent('instantly', 'unsubscribe', { email: body.lead_email });
+  } else {
+    pushEvent('instantly', event, {});
+  }
+});
+
+// SSE endpoint — dashboard subscribes to this for real-time push
+// No polling needed — server pushes events as they happen
+app.get('/api/events', (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  
+  // Send current events immediately
+  res.write('data: ' + JSON.stringify({ type: 'init', events: liveEvents.slice(0, 10) }) + '\n\n');
+  
+  // Keep connection alive with heartbeat
+  const heartbeat = setInterval(() => {
+    res.write('data: ' + JSON.stringify({ type: 'ping', ts: new Date().toISOString() }) + '\n\n');
+  }, 15000);
+  
+  // Store reference so we can push to active connections
+  if (!global.sseClients) global.sseClients = new Set();
+  global.sseClients.add(res);
+  
+  req.on('close', () => {
+    clearInterval(heartbeat);
+    global.sseClients?.delete(res);
+  });
+});
+
+// Push new events to all connected SSE clients
+function broadcastEvent(event) {
+  global.sseClients?.forEach(client => {
+    try { client.write('data: ' + JSON.stringify({ type: 'event', event }) + '\n\n'); } catch(e) {}
+  });
+}
+
+// Override pushEvent to also broadcast
+const _pushEvent = pushEvent;
+
+// GET /api/events/recent — dashboard polls this as fallback
+app.get('/api/events/recent', (req, res) => {
+  res.json({ events: liveEvents.slice(0, 20) });
+});
+
+
 // ── CSV UPLOAD ──────────────────────────────────────────────────────────────
 const multer = require('multer');
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });

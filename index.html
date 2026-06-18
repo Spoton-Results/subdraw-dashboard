@@ -248,6 +248,7 @@ tr:hover td{background:rgba(255,255,255,.015)}
     <div class="sb-divider"></div>
     <div class="sb-section">Import</div>
     <button class="sb-btn" data-tip="Upload CSV" onclick="nav('upload',this)"><span>📤</span><span class="sb-label">Upload CSV</span></button>
+    <button class="sb-btn" data-tip="Live Activity" onclick="nav('activity',this)" id="sb-activity"><span>⚡</span><span class="sb-label">Live Activity</span></button>
   </nav>
 
   <!-- CONTENT -->
@@ -429,6 +430,33 @@ tr:hover td{background:rgba(255,255,255,.015)}
       <div class="card" id="upload-result" style="display:none">
         <div class="card-head"><span class="card-title">Upload result</span></div>
         <div id="result-body" style="padding:16px"></div>
+      </div>
+    </div>
+    <!-- LIVE ACTIVITY -->
+    <div class="view" id="v-activity">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="font-size:13px;font-weight:600;color:var(--text)">Live Activity Feed</div>
+          <div id="live-indicator" style="display:flex;align-items:center;gap:5px;background:var(--green-dim);border:1px solid var(--green-border);border-radius:20px;padding:2px 8px;font-size:10px;color:var(--green)">
+            <div class="ring-dot"></div>Connecting...
+          </div>
+        </div>
+        <div style="font-size:11px;color:var(--muted)" id="event-count">0 events</div>
+      </div>
+      <div class="card">
+        <div class="card-head"><span class="card-title">Real-time events — SMS, emails, replies, stage changes</span></div>
+        <div id="activity-list"><div class="empty">Waiting for events... Send an SMS or email to see it appear here instantly.</div></div>
+      </div>
+      <div class="card" style="margin-top:10px">
+        <div class="card-head"><span class="card-title">Register webhooks to enable real-time updates</span></div>
+        <div style="padding:14px;font-size:12px;line-height:1.8;color:var(--muted)">
+          <div style="margin-bottom:8px;color:var(--text);font-weight:600">GHL Webhook URL:</div>
+          <div style="background:var(--s2);border:1px solid var(--border);border-radius:5px;padding:8px 12px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--teal);margin-bottom:12px;word-break:break-all">https://dashboard-production-f04a.up.railway.app/webhook/ghl</div>
+          <div style="color:var(--muted);font-size:11px;margin-bottom:12px">GHL → Settings → Integrations → Webhooks → Add Webhook → paste URL above → select: Contact Created, SMS Sent, SMS Received, Opportunity Stage Changed, Inbound Message, Outbound Message</div>
+          <div style="margin-bottom:8px;color:var(--text);font-weight:600">Instantly Webhook URL:</div>
+          <div style="background:var(--s2);border:1px solid var(--border);border-radius:5px;padding:8px 12px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--teal);margin-bottom:12px;word-break:break-all">https://dashboard-production-f04a.up.railway.app/webhook/instantly</div>
+          <div style="color:var(--muted);font-size:11px">Instantly → Settings → Webhooks → Add → paste URL → select: Email Replied, Email Opened, Email Bounced, Unsubscribed</div>
+        </div>
       </div>
     </div>
   </div>
@@ -758,9 +786,103 @@ async function uploadCSV() {
   }
 }
 
+
+// ── LIVE ACTIVITY / SSE ──────────────────────────────────────────────
+let allEvents = [];
+let eventSource = null;
+let newEventCount = 0;
+
+const EVENT_ICONS = {
+  new_lead: '👤', sms: '💬', reply: '↩️', open: '👁', 
+  bounce: '⚠️', unsubscribe: '🚫', stage_change: '📊',
+  outbound: '📤', activity: '📝', ping: '🔄'
+};
+
+const EVENT_COLORS = {
+  reply: 'var(--teal)', open: 'var(--blue)', sms: 'var(--amber)',
+  new_lead: 'var(--green)', bounce: 'var(--red)', unsubscribe: 'var(--red)',
+  stage_change: 'var(--purple)', outbound: 'var(--muted)'
+};
+
+function renderActivityFeed() {
+  const el = document.getElementById('activity-list');
+  if (!allEvents.length) {
+    el.innerHTML = '<div class="empty">Waiting for events... Send an SMS or email to see it appear here instantly.</div>';
+    return;
+  }
+  document.getElementById('event-count').textContent = allEvents.length + ' events';
+  el.innerHTML = allEvents.slice(0, 50).map(e => {
+    const icon = EVENT_ICONS[e.type] || '⚡';
+    const color = EVENT_COLORS[e.type] || 'var(--muted)';
+    const time = new Date(e.ts).toLocaleTimeString();
+    const detail = e.data ? Object.entries(e.data).filter(([k,v]) => v && k !== 'raw').map(([k,v]) => v).join(' · ') : '';
+    return `<div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;gap:10px">
+      <span style="font-size:16px;flex-shrink:0">${icon}</span>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px">
+          <span style="font-size:11px;font-weight:700;color:${color};text-transform:uppercase">${e.source} · ${e.type}</span>
+          <span style="font-size:10px;color:var(--hint)">${time}</span>
+        </div>
+        <div style="font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${detail || '—'}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function connectSSE() {
+  if (eventSource) eventSource.close();
+  eventSource = new EventSource('/api/events');
+  
+  document.getElementById('live-indicator').innerHTML = '<div class="ring-dot"></div>Connected';
+  
+  eventSource.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+    if (msg.type === 'init') {
+      allEvents = [...msg.events, ...allEvents];
+      renderActivityFeed();
+    } else if (msg.type === 'event') {
+      allEvents.unshift(msg.event);
+      renderActivityFeed();
+      // Badge on sidebar button
+      newEventCount++;
+      const btn = document.getElementById('sb-activity');
+      if (btn) {
+        const label = btn.querySelector('.sb-label');
+        if (label) label.textContent = 'Live Activity (' + newEventCount + ')';
+      }
+      // Auto-refresh dashboard data too
+      if (['sms','reply','new_lead','stage_change'].includes(msg.event.type)) {
+        load(); // Reload main data
+      }
+    }
+  };
+  
+  eventSource.onerror = () => {
+    document.getElementById('live-indicator').innerHTML = '<div style="width:6px;height:6px;border-radius:50%;background:var(--amber);flex-shrink:0"></div>Reconnecting...';
+    setTimeout(connectSSE, 5000);
+  };
+}
+
+// Clear new event badge when user visits activity tab
+const _origNav = nav;
+function nav(id, btn) {
+  _origNav(id, btn);
+  if (id === 'activity') {
+    newEventCount = 0;
+    const sbBtn = document.getElementById('sb-activity');
+    if (sbBtn) {
+      const label = sbBtn.querySelector('.sb-label');
+      if (label) label.textContent = 'Live Activity';
+    }
+  }
+}
+
+// Start SSE connection
+connectSSE();
+
 renderAgents('all');
 load();
-setInterval(load,60000);
+setInterval(load,30000);
 </script>
 </body>
 </html>
