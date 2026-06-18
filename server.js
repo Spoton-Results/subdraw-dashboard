@@ -303,6 +303,36 @@ app.get('/api/events/recent', (req, res) => {
 
 
 
+
+// ── SCRAPY TRIGGER ─────────────────────────────────────────────────────────
+// Triggers Scrapy spider on the scraper service
+app.post('/api/scrapy-scrape', async (req, res) => {
+  const { url } = req.body;
+  if (!url) return res.status(400).json({ error: 'URL required' });
+  
+  const scraperUrl = process.env.SCRAPER_SERVICE_URL;
+  if (!scraperUrl) {
+    return res.status(503).json({ 
+      error: 'Scraper service not configured',
+      message: 'Set SCRAPER_SERVICE_URL in Railway environment variables once scraper service is deployed'
+    });
+  }
+
+  try {
+    const fetch2 = (await import('node-fetch')).default;
+    const r = await fetch2(scraperUrl + '/scrape', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }),
+      timeout: 5000
+    });
+    const data = await r.json();
+    res.json(data);
+  } catch(e) {
+    res.status(500).json({ error: 'Scraper service error: ' + e.message });
+  }
+});
+
 // ── URL SCRAPER ────────────────────────────────────────────────────────────
 // /api/fetch-page: server-side proxy — browser asks our server to fetch the URL
 // Uses ScraperAPI free tier (1000/mo free) if SCRAPER_API_KEY is set

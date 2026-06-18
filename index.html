@@ -867,46 +867,28 @@ async function startScrape() {
   try {
     logScrape('📡 Fetching page through server proxy...', 'var(--text)');
 
-    // Our server fetches the page (avoids browser CORS restrictions)
-    const proxyRes = await fetch('/api/fetch-page', {
+    // Trigger Scrapy spider via our scraper service
+    logScrape('🕷️ Launching Scrapy spider...', 'var(--text)');
+    
+    const r = await fetch('/api/scrapy-scrape', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url })
-    });
-
-    const proxyData = await proxyRes.json();
-    if (proxyData.error) throw new Error(proxyData.error);
-
-    const html = proxyData.html;
-    logScrape('✓ Page loaded via ' + proxyData.method + ' (' + Math.round(html.length/1000) + 'KB)', 'var(--green)');
-    logScrape('🤖 AI extracting contacts...', 'var(--muted)');
-
-    // Send to server for Claude extraction
-    const r = await fetch('/api/extract-contacts', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ html, url })
     });
 
     const data = await r.json();
 
     if (data.error) {
       logScrape('❌ ' + data.error, 'var(--red)');
+      if (data.message) logScrape('ℹ ' + data.message, 'var(--muted)');
     } else {
-      scrapeContacts = data.contacts || [];
-      logScrape('✓ Found ' + data.found + ' contacts', 'var(--green)');
-      logScrape('✓ Pushed ' + data.pushed + ' to GHL pipeline', 'var(--teal)');
-      if (statsEl) statsEl.textContent = data.found + ' found · ' + data.pushed + ' in GHL';
-
-      if (scrapeContacts.length > 0) {
-        scrapeContacts.forEach(c => {
-          logScrape('  · ' + c.organization_name + (c.city ? ' — ' + c.city : '') + (c.phone ? ' — ' + c.phone : ''), 'var(--muted)');
-        });
-        renderScrapeResults();
-        load(); // Refresh pipeline
-      } else {
-        logScrape('⚠ No GC contacts found on this page. Try a directory or listing URL.', 'var(--amber)');
-      }
+      logScrape('✓ Scrapy spider launched! Job: ' + data.job_id, 'var(--green)');
+      logScrape('⚙️ ' + data.message, 'var(--muted)');
+      logScrape('📊 Contacts will appear in GHL and the Pipeline tab as they are found.', 'var(--teal)');
+      logScrape('🔄 Dashboard auto-refreshes every 30 seconds — check Pipeline tab for new leads.', 'var(--hint)');
+      if (statsEl) statsEl.textContent = 'Scrapy running — check Pipeline tab';
+      // Refresh pipeline after 30s
+      setTimeout(() => { load(); logScrape('🔁 Refreshed pipeline data', 'var(--hint)'); }, 30000);
     }
   } catch(e) {
     logScrape('❌ ' + e.message, 'var(--red)');
