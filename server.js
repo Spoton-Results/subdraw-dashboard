@@ -333,55 +333,47 @@ app.post('/api/scrapy-scrape', async (req, res) => {
   }
 });
 
-// ── URL SCRAPER ────────────────────────────────────────────────────────────
-// /api/fetch-page: server-side proxy — browser asks our server to fetch the URL
-// Uses ScraperAPI free tier (1000/mo free) if SCRAPER_API_KEY is set
-// Falls back to direct fetch with browser headers
+// ── URL SCRAPER — FIRECRAWL ────────────────────────────────────────────────
+// Firecrawl handles JS rendering, pagination, bot detection automatically
+// Set FIRECRAWL_API_KEY in Railway dashboard service variables
 
 app.post('/api/fetch-page', async (req, res) => {
   const { url } = req.body;
   if (!url) return res.status(400).json({ error: 'URL required' });
-  
+
+  const apiKey = process.env.FIRECRAWL_API_KEY;
+  if (!apiKey) return res.status(503).json({ error: 'FIRECRAWL_API_KEY not set in Railway variables' });
+
   try {
     const fetch2 = (await import('node-fetch')).default;
-    let html = '';
-    let method = '';
 
-    // Try ScraperAPI first if key is set (bypasses all blocks)
-    if (process.env.SCRAPER_API_KEY) {
-      const scraperUrl = 'http://api.scraperapi.com?api_key=' + process.env.SCRAPER_API_KEY + '&url=' + encodeURIComponent(url);
-      const r = await fetch2(scraperUrl, { timeout: 30000 });
-      if (r.ok) { html = await r.text(); method = 'scraperapi'; }
+    const r = await fetch2('https://api.firecrawl.dev/v1/scrape', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + apiKey,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        url,
+        formats: ['markdown', 'html'],
+        onlyMainContent: false,
+        waitFor: 2000
+      }),
+      timeout: 60000
+    });
+
+    const data = await r.json();
+
+    if (!r.ok || !data.success) {
+      return res.status(400).json({ error: data.error || 'Firecrawl failed: ' + r.status });
     }
 
-    // Direct fetch with rotating browser headers
-    if (!html) {
-      const userAgents = [
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
-        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-      ];
-      const ua = userAgents[Math.floor(Math.random() * userAgents.length)];
-      const r = await fetch2(url, {
-        headers: {
-          'User-Agent': ua,
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-          'Accept-Language': 'en-US,en;q=0.9',
-          'Accept-Encoding': 'gzip, deflate, br',
-          'Connection': 'keep-alive',
-          'Upgrade-Insecure-Requests': '1',
-          'Sec-Fetch-Dest': 'document',
-          'Sec-Fetch-Mode': 'navigate',
-          'Cache-Control': 'no-cache',
-        },
-        redirect: 'follow',
-        timeout: 20000
-      });
-      if (r.ok) { html = await r.text(); method = 'direct'; }
-      else { return res.status(r.status).json({ error: 'Site returned ' + r.status + '. Try ScraperAPI key for blocked sites.' }); }
-    }
+    // Return both markdown (clean text) and html
+    const html = data.data?.html || '';
+    const markdown = data.data?.markdown || '';
+    const text = markdown || html;
 
-    res.json({ html, method, length: html.length });
+    res.json({ html: text, method: 'firecrawl', length: text.length });
   } catch(e) {
     res.status(500).json({ error: e.message });
   }
