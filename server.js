@@ -73,7 +73,7 @@ app.get('/api/dashboard', async (req, res) => {
   try {
     const locationId = process.env.GHL_LOCATION_ID || 'oe1TpmlDynQGFNdYLkaK';
     const pipelineId = process.env.GHL_PIPELINE_ID || 'lu4BTmjYjJC2hZVKxj1t';
-    const opps = await callGHL('/opportunities/search?pipeline_id=' + pipelineId + '&location_id=' + locationId + '&limit=100');
+    const opps = await callGHL('/opportunities/search?pipeline_id=' + pipelineId + '&locationId=' + locationId + '&limit=100');
     const opportunities = opps.opportunities || [];
 
     const stageMap = {
@@ -90,8 +90,8 @@ app.get('/api/dashboard', async (req, res) => {
       if (tags.includes('demo-clicked')) data.pipeline.demo++;
     });
 
-    // Get leads list
-    const contacts = await callGHL('/contacts/?locationId=' + locationId + '&tags=agent-outreach&limit=50');
+    // Get leads list — search by ca-gc tag using contacts search
+    const contacts = await callGHL('/contacts/?locationId=' + locationId + '&query=ca-gc&limit=50');
     data.leads = (contacts.contacts || []).map(c => ({
       id: c.id,
       name: c.firstName + ' ' + c.lastName,
