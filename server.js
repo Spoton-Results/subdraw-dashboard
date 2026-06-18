@@ -190,3 +190,172 @@ app.get('/api/services', async (req, res) => {
 app.get('/', (req, res) => res.sendFile(__dirname + '/index.html'));
 
 app.listen(port, () => console.log('SubDraw Dashboard running on port ' + port));
+
+// ── CSV UPLOAD ──────────────────────────────────────────────────────────────
+const multer = require('multer');
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+
+// Parse any CSV format into normalized prospect objects
+function parseCSV(text) {
+  const lines = text.trim().split(/\r?\n/).filter(Boolean);
+  if (lines.length < 2) return [];
+
+  // Detect delimiter
+  const delim = lines[0].includes('\t') ? '\t' : ',';
+
+  // Parse header — normalize column names
+  const raw_headers = lines[0].split(delim).map(h => h.replace(/^["']|["']$/g, '').trim().toLowerCase());
+
+  const normalize = h => {
+    if (/first.?name|fname/.test(h)) return 'first_name';
+    if (/last.?name|lname|surname/.test(h)) return 'last_name';
+    if (/^name$|full.?name|contact.?name|owner/.test(h)) return 'name';
+    if (/company|business|organization|org.?name/.test(h)) return 'company';
+    if (/email|e-mail/.test(h)) return 'email';
+    if (/phone|mobile|cell|tel/.test(h)) return 'phone';
+    if (/website|url|web|site/.test(h)) return 'website';
+    if (/city|town/.test(h)) return 'city';
+    if (/state|province/.test(h)) return 'state';
+    if (/zip|postal/.test(h)) return 'zip';
+    if (/title|position|role/.test(h)) return 'title';
+    if (/license|lic/.test(h)) return 'license';
+    if (/rating|stars/.test(h)) return 'rating';
+    if (/reviews|review.?count/.test(h)) return 'reviews';
+    if (/address|addr/.test(h)) return 'address';
+    return h;
+  };
+
+  const headers = raw_headers.map(normalize);
+
+  return lines.slice(1).map(line => {
+    const vals = line.split(delim).map(v => v.replace(/^["']|["']$/g, '').trim());
+    const row = {};
+    headers.forEach((h, i) => { if (vals[i]) row[h] = vals[i]; });
+
+    // Build normalized prospect
+    const first = row.first_name || '';
+    const last = row.last_name || '';
+    const fullName = row.name || (first + ' ' + last).trim() || row.company || '';
+
+    return {
+      name: fullName,
+      first_name: first || fullName.split(' ')[0] || '',
+      last_name: last || fullName.split(' ').slice(1).join(' ') || '',
+      title: row.title || 'Owner',
+      email: row.email || '',
+      phone: row.phone || '',
+      website: row.website || '',
+      company: row.company || row.organization || fullName,
+      city: row.city || '',
+      state: row.state || 'California',
+      zip: row.zip || '',
+      address: row.address || '',
+      license: row.license || '',
+      rating: row.rating || '',
+      reviews: row.reviews || '',
+      source: 'csv_upload'
+    };
+  }).filter(p => p.company || p.email || p.phone);
+}
+
+// POST /api/upload-csv — parse CSV and push to GHL + Instantly
+app.post('/api/upload-csv', upload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+  const text = req.file.buffer.toString('utf8');
+  const prospects = parseCSV(text);
+
+  if (!prospects.length) return res.status(400).json({ error: 'No valid rows found in CSV' });
+
+  const locId = process.env.GHL_LOCATION_ID || 'oe1TpmlDynQGFNdYLkaK';
+  const pipelineId = process.env.GHL_PIPELINE_ID || 'lu4BTmjYjJC2hZVKxj1t';
+  const coldStageId = process.env.GHL_STAGE_COLD || '751975e9-c7f2-46a4-b821-e053bf505d8a';
+  const campaignId = process.env.INSTANTLY_CAMPAIGN_ID || 'bb1d4655-8d06-4218-89d4-ec196bc8ca81';
+
+  const results = { pushed_ghl: 0, pushed_instantly: 0, skipped: 0, errors: [] };
+
+  for (const p of prospects) {
+    try {
+      // Push to GHL
+      const contactRes = await ghl('/contacts/', 'POST', {
+        locationId: locId,
+        firstName: p.first_name,
+        lastName: p.last_name,
+        name: p.name,
+        companyName: p.company,
+        email: p.email,
+        phone: p.phone,
+        website: p.website,
+        address1: p.address,
+        city: p.city,
+        state: p.state,
+        postalCode: p.zip,
+        source: 'CSV Upload',
+        tags: ['csv-upload', 'ca-gc', 'cold-outreach', 'agent-outreach', 'gc-prospect', 'subdraw-ca'],
+        customFields: [
+          { key: 'license_number', field_value: p.license },
+          { key: 'csv_rating', field_value: p.rating },
+          { key: 'csv_reviews', field_value: p.reviews }
+        ].filter(f => f.field_value)
+      });
+
+      const contactId = contactRes.contact?.id;
+      if (contactId) {
+        results.pushed_ghl++;
+
+        // Add to pipeline
+        await ghl('/opportunities/', 'POST', {
+          pipelineId,
+          pipelineStageId: coldStageId,
+          contactId,
+          name: p.company + ' — SubDraw Outreach',
+          status: 'open',
+          source: 'CSV Upload'
+        }).catch(() => {}); // Pipeline add is non-blocking
+
+        // Push to Instantly if has email
+        if (p.email) {
+          await instantly('/api/v1/lead/add', 'POST', {
+            campaign_id: campaignId,
+            skip_if_in_workspace: true,
+            leads: [{
+              email: p.email,
+              first_name: p.first_name,
+              last_name: p.last_name,
+              company_name: p.company,
+              phone: p.phone,
+              website: p.website,
+              city: p.city,
+              state: p.state,
+              personalization: '',
+              custom_variables: {
+                company: p.company,
+                city: p.city || 'California',
+                current_tool: 'spreadsheets',
+                pain_point: 'invoice protection',
+                demo_url: 'https://subdraw.com/login'
+              }
+            }]
+          }).then(() => results.pushed_instantly++)
+            .catch(e => results.errors.push(p.email + ': ' + e.message));
+        }
+      }
+    } catch(e) {
+      results.errors.push((p.company || p.email) + ': ' + e.message);
+      results.skipped++;
+    }
+
+    // Small delay to avoid rate limits
+    await new Promise(r => setTimeout(r, 200));
+  }
+
+  res.json({
+    total_rows: prospects.length,
+    pushed_ghl: results.pushed_ghl,
+    pushed_instantly: results.pushed_instantly,
+    skipped: results.skipped,
+    errors: results.errors.slice(0, 10),
+    sample: prospects.slice(0, 3)
+  });
+});
+

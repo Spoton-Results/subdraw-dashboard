@@ -245,6 +245,9 @@ tr:hover td{background:rgba(255,255,255,.015)}
     <div class="sb-section">System</div>
     <button class="sb-btn" data-tip="Agents" onclick="nav('agt',this)"><span>🤖</span><span class="sb-label">Agents (37)</span></button>
     <button class="sb-btn" data-tip="Health" onclick="nav('hlth',this)"><span>🏥</span><span class="sb-label">Health</span></button>
+    <div class="sb-divider"></div>
+    <div class="sb-section">Import</div>
+    <button class="sb-btn" data-tip="Upload CSV" onclick="nav('upload',this)"><span>📤</span><span class="sb-label">Upload CSV</span></button>
   </nav>
 
   <!-- CONTENT -->
@@ -391,6 +394,43 @@ tr:hover td{background:rgba(255,255,255,.015)}
       </div>
     </div>
 
+    <!-- CSV UPLOAD -->
+    <div class="view" id="v-upload">
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-head"><span class="card-title">Upload leads from CSV</span></div>
+        <div style="padding:16px">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.7">
+            Upload any CSV from Google Maps, Apollo export, manual list, or any other source.<br>
+            Accepted columns (any order, any name): <span style="color:var(--teal)">name, company, email, phone, website, city, state, title, license, rating, reviews</span>
+          </div>
+          <div id="drop-zone" style="border:2px dashed var(--border2);border-radius:8px;padding:32px;text-align:center;cursor:pointer;transition:all .2s" 
+               onclick="document.getElementById('csv-input').click()"
+               ondragover="event.preventDefault();this.style.borderColor='var(--teal)'"
+               ondragleave="this.style.borderColor='var(--border2)'"
+               ondrop="handleDrop(event)">
+            <div style="font-size:28px;margin-bottom:8px">📂</div>
+            <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px">Drop CSV file here or click to browse</div>
+            <div style="font-size:11px;color:var(--muted)">Supports .csv and .tsv — up to 10MB</div>
+            <input type="file" id="csv-input" accept=".csv,.tsv" style="display:none" onchange="handleFile(this.files[0])">
+          </div>
+        </div>
+      </div>
+
+      <div class="card" id="upload-preview" style="display:none">
+        <div class="card-head">
+          <span class="card-title" id="preview-title">Preview</span>
+          <button class="rbtn" id="upload-btn" onclick="uploadCSV()" style="font-size:11px;padding:4px 12px;background:var(--teal);color:#000;border-color:var(--teal);font-weight:600">
+            Push to GHL + Instantly
+          </button>
+        </div>
+        <div id="preview-table"></div>
+      </div>
+
+      <div class="card" id="upload-result" style="display:none">
+        <div class="card-head"><span class="card-title">Upload result</span></div>
+        <div id="result-body" style="padding:16px"></div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -630,6 +670,89 @@ setInterval(()=>{
   const el=document.getElementById('clk');
   if(el.textContent.startsWith('Updated'))el.textContent='Updated '+new Date().toLocaleTimeString();
 },1000);
+
+
+// ── CSV UPLOAD ──────────────────────────────────────────────────────
+let csvFile = null;
+let parsedRows = [];
+
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('drop-zone').style.borderColor = 'var(--border2)';
+  const f = e.dataTransfer.files[0];
+  if (f) handleFile(f);
+}
+
+function handleFile(file) {
+  if (!file) return;
+  csvFile = file;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const text = e.target.result;
+    const lines = text.trim().split(/\r?\n/).filter(Boolean);
+    const delim = lines[0].includes('\t') ? '\t' : ',';
+    const headers = lines[0].split(delim).map(h => h.replace(/^["']|["']$/g,'').trim());
+    parsedRows = lines.slice(1).map(line => {
+      const vals = line.split(delim).map(v => v.replace(/^["']|["']$/g,'').trim());
+      const row = {};
+      headers.forEach((h,i) => { if(vals[i]) row[h] = vals[i]; });
+      return row;
+    });
+
+    document.getElementById('upload-preview').style.display = 'block';
+    document.getElementById('preview-title').textContent = 
+      file.name + ' — ' + parsedRows.length + ' rows';
+
+    // Show preview table
+    const show = parsedRows.slice(0, 5);
+    document.getElementById('preview-table').innerHTML = 
+      '<table><thead><tr>' + headers.map(h => '<th>' + h + '</th>').join('') + '</tr></thead><tbody>' +
+      show.map(row => '<tr>' + headers.map(h => '<td>' + (row[h] || '—') + '</td>').join('') + '</tr>').join('') +
+      '</tbody></table>' +
+      (parsedRows.length > 5 ? '<div style="padding:8px 12px;font-size:11px;color:var(--muted)">+ ' + (parsedRows.length-5) + ' more rows</div>' : '');
+  };
+  reader.readAsText(file);
+}
+
+async function uploadCSV() {
+  if (!csvFile) return;
+  const btn = document.getElementById('upload-btn');
+  btn.textContent = 'Uploading...';
+  btn.disabled = true;
+
+  const form = new FormData();
+  form.append('file', csvFile);
+
+  try {
+    const r = await fetch('/api/upload-csv', { method: 'POST', body: form });
+    const data = await r.json();
+
+    document.getElementById('upload-result').style.display = 'block';
+    document.getElementById('result-body').innerHTML = `
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px">
+        <div style="background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:12px;text-align:center">
+          <div style="font-size:22px;font-weight:700;color:var(--teal);font-family:'JetBrains Mono',monospace">${data.pushed_ghl||0}</div>
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-top:4px">Added to GHL</div>
+        </div>
+        <div style="background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:12px;text-align:center">
+          <div style="font-size:22px;font-weight:700;color:var(--blue);font-family:'JetBrains Mono',monospace">${data.pushed_instantly||0}</div>
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-top:4px">Added to Instantly</div>
+        </div>
+        <div style="background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:12px;text-align:center">
+          <div style="font-size:22px;font-weight:700;color:var(--muted);font-family:'JetBrains Mono',monospace">${data.skipped||0}</div>
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-top:4px">Skipped / Errors</div>
+        </div>
+      </div>
+      ${data.errors?.length ? '<div style="font-size:11px;color:var(--red);margin-top:8px">' + data.errors.join('<br>') + '</div>' : ''}
+      <div style="font-size:12px;color:var(--teal);margin-top:10px">✓ Leads are now in GHL Cold stage and queued in Instantly. Monday prospector will pick them up for email sequences.</div>
+    `;
+    btn.textContent = '✓ Done';
+  } catch(e) {
+    document.getElementById('result-body').innerHTML = '<div style="color:var(--red);padding:8px">Error: ' + e.message + '</div>';
+    btn.textContent = 'Retry';
+    btn.disabled = false;
+  }
+}
 
 renderAgents('all');
 load();
