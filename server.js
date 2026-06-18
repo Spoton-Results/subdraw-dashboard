@@ -807,13 +807,23 @@ app.post('/api/upload-csv', upload.single('file'), async (req, res) => {
       if (p.website)    contactPayload.website    = p.website;
       if (p.city)       contactPayload.city       = p.city;
       if (p.state)      contactPayload.state      = p.state;
-      const contactRes = await ghl('/contacts/', 'POST', contactPayload).catch(e => {
-        console.error('[Upload] GHL error for', p.company, ':', e.message);
-        console.error('[Upload] Payload was:', JSON.stringify(contactPayload));
-        throw e;
-      });
-
-      const contactId = contactRes.contact?.id;
+      let contactId = null;
+      try {
+        const contactRes = await ghl('/contacts/', 'POST', contactPayload);
+        contactId = contactRes.contact?.id;
+      } catch(e) {
+        // 400 duplicate = contact already exists — extract their ID and continue to Instantly
+        const dupMatch = e.message.match(/"contactId":"([^"]+)"/);
+        if (dupMatch) {
+          contactId = dupMatch[1];
+          console.log('[Upload] Duplicate — reusing existing GHL contact:', contactId, 'for', p.company);
+          results.skipped++; // Count as skipped not error
+        } else {
+          results.errors.push((p.company || p.email) + ': ' + e.message);
+          results.skipped++;
+          continue;
+        }
+      }
       if (contactId) {
         results.pushed_ghl++;
 
