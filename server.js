@@ -691,6 +691,88 @@ app.get('/api/poll-sms', async (req, res) => {
   res.json({ checked: true, alerts: [...alertedMessages].slice(-5) });
 });
 
+
+// ── HUNTER EMAIL ENRICHMENT ────────────────────────────────────────────────
+// Finds emails for GHL contacts that only have phone/domain, pushes to Instantly
+
+app.post('/api/hunter-enrich', async (req, res) => {
+  const apiKey = process.env.HUNTER_API_KEY;
+  if (!apiKey) return res.status(503).json({ error: 'HUNTER_API_KEY not set in Railway variables' });
+
+  const fetch2 = (await import('node-fetch')).default;
+  const locId = process.env.GHL_LOCATION_ID || 'oe1TpmlDynQGFNdYLkaK';
+  const caId = process.env.INSTANTLY_CA_CAMPAIGN_ID || process.env.INSTANTLY_CAMPAIGN_ID || 'bb1d4655-8d06-4218-89d4-ec196bc8ca81';
+  const utId = process.env.INSTANTLY_UT_CAMPAIGN_ID || '1c57cd85-5694-444d-9b03-8978c628ab8d';
+
+  const results = { enriched: 0, skipped: 0, failed: 0, found: [] };
+
+  // Check Hunter credits first
+  const creditRes = await fetch2(`https://api.hunter.io/v2/account?api_key=${apiKey}`);
+  const creditData = await creditRes.json();
+  const available = creditData.data?.requests?.searches?.available || 0;
+  if (available === 0) return res.status(429).json({ error: 'No Hunter credits remaining this month' });
+
+  // Get contacts without emails from both tags
+  for (const tag of ['ut-gc', 'ca-gc']) {
+    const data = await callGHL(`/contacts/?locationId=${locId}&query=${tag}&limit=100`);
+    const contacts = (data.contacts || []).filter(c => !c.email && (c.website || c.companyName));
+
+    for (const contact of contacts) {
+      if (results.enriched + results.failed >= available) break;
+
+      let domain = null;
+      if (contact.website) {
+        try { domain = new URL(contact.website.startsWith('http') ? contact.website : 'https://' + contact.website).hostname.replace('www.',''); } catch {}
+      }
+      if (!domain && contact.companyName) {
+        domain = contact.companyName.toLowerCase().replace(/[^a-z0-9]/g,'').substring(0,20) + '.com';
+      }
+      if (!domain) { results.skipped++; continue; }
+
+      try {
+        // Hunter domain search
+        const hr = await fetch2(`https://api.hunter.io/v2/domain-search?domain=${domain}&api_key=${apiKey}&limit=3`);
+        const hd = await hr.json();
+        const emails = hd.data?.emails || [];
+        if (!emails.length) {
+          // Try email finder
+          if (contact.firstName && contact.lastName) {
+            const fr = await fetch2(`https://api.hunter.io/v2/email-finder?domain=${domain}&first_name=${encodeURIComponent(contact.firstName)}&last_name=${encodeURIComponent(contact.lastName)}&api_key=${apiKey}`);
+            const fd = await fr.json();
+            if (fd.data?.email) emails.push({ value: fd.data.email, confidence: fd.data.score });
+          }
+        }
+        if (!emails.length) { results.skipped++; continue; }
+
+        const best = emails.sort((a,b) => (b.confidence||0)-(a.confidence||0))[0];
+        const email = best.value;
+
+        // Update GHL
+        await callGHL(`/contacts/${contact.id}`, 'PUT', { email });
+
+        // Push to Instantly
+        const campId = tag === 'ca-gc' ? caId : utId;
+        await callInstantly('/leads', 'POST', {
+          campaign_id: campId, skip_if_in_workspace: true,
+          email, first_name: contact.firstName||'', last_name: contact.lastName||'',
+          company_name: contact.companyName||'', phone: contact.phone||'',
+          city: contact.city||'', state: contact.state||''
+        }).catch(()=>{});
+
+        results.enriched++;
+        results.found.push({ company: contact.companyName, email, confidence: best.confidence });
+        pushEvent('ghl', 'email_found', { company: contact.companyName, email, source: 'hunter' });
+
+        await new Promise(r => setTimeout(r, 1200)); // Rate limit
+      } catch(e) {
+        results.failed++;
+      }
+    }
+  }
+
+  res.json({ ...results, credits_remaining: available - results.enriched });
+});
+
 // ── CSV UPLOAD ──────────────────────────────────────────────────────────────
 const multer = require('multer');
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });

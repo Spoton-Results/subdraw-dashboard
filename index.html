@@ -272,6 +272,7 @@ tr:hover td{background:rgba(255,255,255,.015)}
     <div class="sb-divider"></div>
     <div class="sb-section">Import</div>
     <button class="sb-btn" data-tip="Scrape URL" onclick="nav('scrape',this)"><span>🕷️</span><span class="sb-label">Scrape URL</span></button>
+    <button class="sb-btn" data-tip="Find Emails" onclick="nav('hunter',this)"><span>🔍</span><span class="sb-label">Find Emails</span></button>
     <button class="sb-btn" data-tip="Upload CSV" onclick="nav('upload',this)"><span>📤</span><span class="sb-label">Upload CSV</span></button>
     <button class="sb-btn" data-tip="Live Activity" onclick="nav('activity',this)" id="sb-activity"><span>⚡</span><span class="sb-label">Live Activity</span></button>
   </nav>
@@ -420,6 +421,31 @@ tr:hover td{background:rgba(255,255,255,.015)}
       </div>
     </div>
 
+    <!-- HUNTER EMAIL FINDER -->
+    <div class="view" id="v-hunter">
+      <div class="card">
+        <div class="card-head"><span class="card-title">🔍 Hunter Email Finder</span></div>
+        <div style="padding:16px">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:16px;line-height:1.8">
+            Finds emails for all GHL contacts that only have phone numbers (Google Maps contacts).<br>
+            Uses <strong style="color:var(--teal)">Hunter.io</strong> to look up email addresses by company domain.<br>
+            Found emails are added to GHL and pushed into Instantly campaigns automatically.
+          </div>
+          <div style="background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:12px;margin-bottom:14px;font-size:11px;color:var(--muted)">
+            <div style="color:var(--text);font-weight:600;margin-bottom:4px">Credits: 50/month free</div>
+            Each domain search = 1 credit. Best used on contacts with known websites.
+          </div>
+          <button onclick="runHunter()" id="hunter-btn"
+            style="background:var(--teal);color:#000;border:none;border-radius:6px;padding:10px 24px;font-weight:700;font-size:13px;font-family:inherit;cursor:pointer">
+            Find Missing Emails →
+          </button>
+        </div>
+      </div>
+      <div id="hunter-status" style="display:none" class="card" style="margin-top:12px">
+        <div class="card-head"><span class="card-title">Results</span></div>
+        <div id="hunter-results" style="padding:14px;font-size:12px"></div>
+      </div>
+    </div>
     <!-- URL SCRAPER -->
     <div class="view" id="v-scrape">
       <div class="card" style="margin-bottom:12px">
@@ -898,6 +924,46 @@ async function uploadCSV() {
 }
 
 
+
+
+// ── HUNTER EMAIL FINDER ──────────────────────────────────────────────
+async function runHunter() {
+  const btn = document.getElementById('hunter-btn');
+  btn.textContent = 'Finding emails...';
+  btn.disabled = true;
+  btn.style.opacity = '0.6';
+
+  document.getElementById('hunter-status').style.display = 'block';
+  document.getElementById('hunter-results').innerHTML = '<div style="color:var(--muted)">⏳ Searching Hunter.io for missing emails...</div>';
+
+  try {
+    const r = await fetch('/api/hunter-enrich', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+    const data = await r.json();
+
+    if (data.error) {
+      document.getElementById('hunter-results').innerHTML = '<div style="color:var(--red)">❌ ' + data.error + '</div>';
+    } else {
+      const found = data.found || [];
+      document.getElementById('hunter-results').innerHTML =
+        '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px">' +
+        '<div style="background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:10px;text-align:center"><div style="font-size:20px;font-weight:700;color:var(--teal)">' + data.enriched + '</div><div style="font-size:10px;color:var(--muted);margin-top:3px;text-transform:uppercase">Emails Found</div></div>' +
+        '<div style="background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:10px;text-align:center"><div style="font-size:20px;font-weight:700;color:var(--muted)">' + data.skipped + '</div><div style="font-size:10px;color:var(--muted);margin-top:3px;text-transform:uppercase">No Email Found</div></div>' +
+        '<div style="background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:10px;text-align:center"><div style="font-size:20px;font-weight:700;color:var(--hint)">' + data.credits_remaining + '</div><div style="font-size:10px;color:var(--muted);margin-top:3px;text-transform:uppercase">Credits Left</div></div>' +
+        '</div>' +
+        (found.length ? '<table><thead><tr><th>Company</th><th>Email Found</th><th>Confidence</th></tr></thead><tbody>' +
+        found.map(f => '<tr><td>' + f.company + '</td><td style="color:var(--teal)">' + f.email + '</td><td>' + (f.confidence||'?') + '%</td></tr>').join('') +
+        '</tbody></table>' : '<div style="color:var(--muted);font-size:12px">No new emails found — contacts may already have emails or domains not in Hunter database.</div>');
+
+      if (data.enriched > 0) load(); // Refresh pipeline
+    }
+  } catch(e) {
+    document.getElementById('hunter-results').innerHTML = '<div style="color:var(--red)">❌ ' + e.message + '</div>';
+  }
+
+  btn.textContent = 'Find Missing Emails →';
+  btn.disabled = false;
+  btn.style.opacity = '1';
+}
 
 // ── URL SCRAPER ──────────────────────────────────────────────────────
 // Browser fetches the page (bypasses Railway network restrictions)
