@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>SubDraw — Operations Center</title>
+<title>SubDraw OPS</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 :root{
@@ -14,57 +14,74 @@
   --blue:#58a6ff;--teal:#39d353;--purple:#bc8cff;
   --cyan:#79c0ff;--orange:#ffa657;
 }
-body{background:var(--bg);color:var(--text);font-family:'SF Mono',Monaco,'Courier New',monospace;font-size:13px;min-height:100vh}
-.nav{background:var(--s1);border-bottom:1px solid var(--border);height:52px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;position:sticky;top:0;z-index:100}
-.logo{font-size:15px;font-weight:700;color:var(--text)}.logo span{color:var(--teal)}
-.tag{font-size:10px;background:rgba(57,211,83,.1);color:var(--teal);border:1px solid rgba(57,211,83,.25);padding:2px 8px;border-radius:3px;letter-spacing:.06em}
-.pulse{width:7px;height:7px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
-@keyframes pulse{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(63,185,80,.4)}50%{opacity:.6;box-shadow:0 0 0 5px rgba(63,185,80,0)}}
-.nav-brand{display:flex;align-items:center;gap:10px}
-.nav-right{display:flex;align-items:center;gap:10px}
-.clock{font-size:11px;color:var(--muted)}
-.btn{background:var(--s3);border:1px solid var(--border2);color:var(--muted);padding:5px 12px;border-radius:4px;cursor:pointer;font-size:12px;font-family:inherit;transition:all .15s}
-.btn:hover{background:var(--border2);color:var(--text)}
-.tabs{background:var(--s1);border-bottom:1px solid var(--border);padding:0 20px;display:flex}
-.tab{font-size:12px;padding:11px 16px;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;background:none;border-top:none;border-left:none;border-right:none;font-family:inherit;transition:all .15s;white-space:nowrap}
-.tab:hover{color:var(--text)}.tab.on{color:var(--text);border-bottom-color:var(--teal)}
-.view{display:none;padding:20px;max-width:1600px;margin:0 auto}.view.on{display:block}
-.g5{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:14px}
-.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
-.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:14px}
-.g2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
-.g2l{display:grid;grid-template-columns:3fr 2fr;gap:14px;margin-bottom:14px}
-.met{background:var(--s1);border:1px solid var(--border);border-radius:5px;padding:14px 16px;position:relative;overflow:hidden}
+body{background:var(--bg);color:var(--text);font-family:'SF Mono',Monaco,'Courier New',monospace;font-size:12px;height:100vh;display:flex;flex-direction:column;overflow:hidden}
+/* TOP BAR */
+.topbar{background:var(--s1);border-bottom:1px solid var(--border);height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 14px;flex-shrink:0}
+.logo{font-size:14px;font-weight:700}.logo span{color:var(--teal)}
+.topbar-r{display:flex;align-items:center;gap:10px}
+.pulse{width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(63,185,80,.4)}50%{opacity:.6;box-shadow:0 0 0 4px rgba(63,185,80,0)}}
+.clk{font-size:11px;color:var(--muted)}
+.rbtn{background:var(--s3);border:1px solid var(--border2);color:var(--muted);padding:4px 10px;border-radius:3px;cursor:pointer;font-size:11px;font-family:inherit}
+.rbtn:hover{color:var(--text);background:var(--border2)}
+/* MAIN LAYOUT */
+.layout{display:flex;flex:1;overflow:hidden}
+/* SIDEBAR */
+.sidebar{width:160px;background:var(--s1);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto}
+.sb-label{font-size:9px;color:var(--hint);text-transform:uppercase;letter-spacing:.1em;padding:12px 12px 4px;font-weight:700}
+.sb-btn{display:flex;align-items:center;gap:8px;padding:8px 12px;color:var(--muted);cursor:pointer;border-left:2px solid transparent;font-size:12px;font-family:inherit;background:none;border-top:none;border-right:none;border-bottom:none;width:100%;text-align:left;transition:all .12s;white-space:nowrap}
+.sb-btn:hover{color:var(--text);background:rgba(255,255,255,.03)}
+.sb-btn.on{color:var(--text);border-left-color:var(--teal);background:rgba(57,211,83,.05)}
+.sb-icon{font-size:14px;flex-shrink:0}
+.sb-divider{height:1px;background:var(--border);margin:6px 0}
+/* CONTENT */
+.content{flex:1;overflow-y:auto;overflow-x:hidden;padding:14px}
+/* VIEWS */
+.view{display:none}.view.on{display:block}
+/* METRICS */
+.mg{display:grid;gap:8px;margin-bottom:12px}
+.mg-5{grid-template-columns:repeat(5,1fr)}
+.mg-4{grid-template-columns:repeat(4,1fr)}
+.mg-3{grid-template-columns:repeat(3,1fr)}
+.mg-2{grid-template-columns:1fr 1fr}
+.met{background:var(--s1);border:1px solid var(--border);border-radius:4px;padding:10px 12px;position:relative;overflow:hidden}
 .met::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--hint)}
 .met.g::before{background:var(--green)}.met.b::before{background:var(--blue)}
 .met.p::before{background:var(--purple)}.met.a::before{background:var(--amber)}.met.t::before{background:var(--teal)}
-.met-l{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px}
-.met-v{font-size:26px;font-weight:700;line-height:1;margin-bottom:3px}
-.met.g .met-v,.met.t .met-v{color:var(--green)}.met.b .met-v{color:var(--blue)}
-.met.p .met-v{color:var(--purple)}.met.a .met-v{color:var(--amber)}
-.met-s{font-size:11px;color:var(--hint)}
-.pipe{display:grid;grid-template-columns:repeat(5,1fr);background:var(--s1);border:1px solid var(--border);border-radius:5px;overflow:hidden;margin-bottom:14px}
-.stg{padding:16px 12px;text-align:center;border-right:1px solid var(--border);position:relative}
+.ml{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px}
+.mv{font-size:20px;font-weight:700;line-height:1;margin-bottom:2px}
+.met.g .mv,.met.t .mv{color:var(--green)}.met.b .mv{color:var(--blue)}
+.met.p .mv{color:var(--purple)}.met.a .mv{color:var(--amber)}
+.ms{font-size:10px;color:var(--hint)}
+/* PIPELINE */
+.pipe{display:grid;grid-template-columns:repeat(5,1fr);background:var(--s1);border:1px solid var(--border);border-radius:4px;overflow:hidden;margin-bottom:12px}
+.stg{padding:10px 8px;text-align:center;border-right:1px solid var(--border);position:relative}
 .stg:last-child{border-right:none}
-.stg-l{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px}
-.stg-n{font-size:30px;font-weight:700;line-height:1;margin-bottom:3px}
-.stg-s{font-size:10px;color:var(--hint)}
+.stg-l{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px}
+.stg-n{font-size:22px;font-weight:700;line-height:1;margin-bottom:2px}
+.stg-s{font-size:9px;color:var(--hint)}
 .stg-b{position:absolute;bottom:0;left:0;right:0;height:2px}
 .sc .stg-n{color:var(--muted)}.sc .stg-b{background:var(--hint)}
 .se .stg-n{color:var(--blue)}.se .stg-b{background:var(--blue)}
 .sr .stg-n{color:var(--amber)}.sr .stg-b{background:var(--amber)}
 .sd .stg-n{color:var(--purple)}.sd .stg-b{background:var(--purple)}
 .su .stg-n{color:var(--green)}.su .stg-b{background:var(--green)}
-.card{background:var(--s1);border:1px solid var(--border);border-radius:5px;overflow:hidden;margin-bottom:14px}
-.ch{padding:11px 15px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
-.ct{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.09em}
+/* CARDS */
+.card{background:var(--s1);border:1px solid var(--border);border-radius:4px;overflow:hidden;margin-bottom:10px}
+.ch{padding:8px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.ct{font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.09em}
+/* 2 col layout */
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+.row2l{display:grid;grid-template-columns:3fr 2fr;gap:10px;margin-bottom:10px}
+/* TABLE */
 table{width:100%;border-collapse:collapse}
-th{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;padding:8px 14px;text-align:left;border-bottom:1px solid var(--border);font-weight:700;white-space:nowrap}
-td{padding:9px 14px;border-bottom:1px solid var(--border);color:var(--text);vertical-align:middle}
+th{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;padding:6px 10px;text-align:left;border-bottom:1px solid var(--border);font-weight:700;white-space:nowrap}
+td{padding:7px 10px;border-bottom:1px solid var(--border);color:var(--text);vertical-align:middle;font-size:11px}
 tr:last-child td{border-bottom:none}
 tr:hover td{background:rgba(255,255,255,.015)}
-.tp{font-weight:600}.tm{font-size:11px;color:var(--muted)}
-.bdg{font-size:10px;padding:2px 6px;border-radius:3px;font-weight:700;letter-spacing:.04em;white-space:nowrap}
+.tp{font-weight:600}.tm{font-size:10px;color:var(--muted)}
+/* BADGES */
+.bdg{font-size:9px;padding:2px 5px;border-radius:2px;font-weight:700;letter-spacing:.04em;white-space:nowrap}
 .bh{background:rgba(248,81,73,.12);color:var(--red);border:1px solid rgba(248,81,73,.25)}
 .bw{background:rgba(210,153,34,.12);color:var(--amber);border:1px solid rgba(210,153,34,.25)}
 .bc{background:rgba(72,79,88,.15);color:var(--hint);border:1px solid var(--border)}
@@ -74,179 +91,202 @@ tr:hover td{background:rgba(255,255,255,.015)}
 .brun{background:rgba(88,166,255,.1);color:var(--blue);border:1px solid rgba(88,166,255,.2)}
 .bsch{background:rgba(72,79,88,.12);color:var(--muted);border:1px solid var(--border)}
 .btrg{background:rgba(188,140,255,.1);color:var(--purple);border:1px solid rgba(188,140,255,.2)}
-.coo-item{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;gap:12px;transition:background .1s}
+/* COO */
+.coo-item{padding:10px 12px;border-bottom:1px solid var(--border);display:flex;gap:10px}
 .coo-item:last-child{border-bottom:none}
-.coo-item:hover{background:rgba(255,255,255,.015)}
-.coo-pri{width:3px;flex-shrink:0;border-radius:2px;align-self:stretch}
+.coo-pri{width:3px;flex-shrink:0;border-radius:1px;align-self:stretch}
 .p-crit .coo-pri{background:var(--red)}.p-high .coo-pri{background:var(--amber)}
 .p-med .coo-pri{background:var(--blue)}.p-low .coo-pri{background:var(--hint)}
-.coo-icon{font-size:10px;font-weight:700;min-width:52px;padding-top:1px;letter-spacing:.04em;color:var(--hint)}
+.coo-icon{font-size:9px;font-weight:700;min-width:46px;padding-top:1px;color:var(--hint)}
 .p-crit .coo-icon{color:var(--red)}.p-high .coo-icon{color:var(--amber)}.p-med .coo-icon{color:var(--blue)}
-.coo-body{flex:1}
-.coo-action{font-size:13px;font-weight:600;color:var(--text);margin-bottom:5px;line-height:1.4}
-.coo-detail{font-size:12px;color:var(--muted);line-height:1.65}
-.coo-tags{display:flex;gap:6px;margin-top:7px;flex-wrap:wrap}
-.ct-tag{font-size:10px;padding:2px 7px;border-radius:3px;font-weight:600}
+.coo-body{flex:1;min-width:0}
+.coo-action{font-size:12px;font-weight:600;color:var(--text);margin-bottom:3px;line-height:1.3}
+.coo-detail{font-size:11px;color:var(--muted);line-height:1.5}
+.coo-tags{display:flex;gap:4px;margin-top:5px;flex-wrap:wrap}
+.ct-tag{font-size:9px;padding:1px 5px;border-radius:2px;font-weight:600}
 .pt-crit{background:rgba(248,81,73,.1);color:var(--red)}.pt-high{background:rgba(210,153,34,.1);color:var(--amber)}
 .pt-med{background:rgba(88,166,255,.1);color:var(--blue)}.pt-low{background:rgba(72,79,88,.12);color:var(--muted)}
 .cat-revenue{background:rgba(57,211,83,.1);color:var(--green)}.cat-pipeline{background:rgba(88,166,255,.1);color:var(--cyan)}
 .cat-outreach{background:rgba(188,140,255,.1);color:var(--purple)}.cat-partner{background:rgba(255,166,87,.1);color:var(--orange)}
 .cat-intel{background:rgba(57,211,83,.08);color:var(--teal)}.cat-infra{background:rgba(248,81,73,.1);color:var(--red)}
 .cat-launch{background:rgba(121,192,255,.1);color:var(--cyan)}
-.launch{background:var(--s2);border:1px solid var(--border);border-top:2px solid var(--teal);border-radius:5px;padding:14px 18px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between}
-.launch-l{display:flex;align-items:center;gap:14px}
-.launch-t{font-size:13px;font-weight:600;color:var(--text)}
-.launch-s{font-size:11px;color:var(--muted);margin-top:3px}
-.launch-days{font-size:34px;font-weight:700;color:var(--teal);font-family:monospace;line-height:1;text-align:right}
-.launch-dl{font-size:9px;color:var(--muted);text-align:right;text-transform:uppercase;letter-spacing:.07em;margin-top:2px}
-.hgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:12px}
-.hitem{background:var(--s2);border:1px solid var(--border);border-radius:4px;padding:10px 12px;display:flex;align-items:center;gap:8px}
-.hdot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
-.hok{background:var(--green);box-shadow:0 0 6px rgba(63,185,80,.4)}.herr{background:var(--red)}.hwarn{background:var(--amber)}
-.hname{font-size:12px;font-weight:500}.hst{font-size:10px;color:var(--muted);margin-top:1px}
-.frow{display:flex;gap:4px;padding:9px 13px;border-bottom:1px solid var(--border);flex-wrap:wrap}
-.flt{font-size:11px;padding:3px 9px;border-radius:3px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-family:inherit;transition:all .15s}
+/* LAUNCH */
+.launch{background:var(--s2);border:1px solid var(--border);border-top:2px solid var(--teal);border-radius:4px;padding:10px 14px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between}
+.launch-t{font-size:12px;font-weight:600}.launch-s{font-size:10px;color:var(--muted);margin-top:2px}
+.launch-days{font-size:26px;font-weight:700;color:var(--teal);font-family:monospace;line-height:1;text-align:right}
+.launch-dl{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;text-align:right}
+/* HEALTH */
+.hgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:10px}
+.hitem{background:var(--s2);border:1px solid var(--border);border-radius:3px;padding:8px 10px;display:flex;align-items:center;gap:7px}
+.hdot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.hok{background:var(--green);box-shadow:0 0 5px rgba(63,185,80,.4)}.herr{background:var(--red)}
+.hname{font-size:11px;font-weight:500}.hst{font-size:9px;color:var(--muted);margin-top:1px}
+/* FILTER */
+.frow{display:flex;gap:3px;padding:7px 10px;border-bottom:1px solid var(--border);flex-wrap:wrap}
+.flt{font-size:10px;padding:2px 7px;border-radius:2px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-family:inherit;transition:all .12s}
 .flt:hover{border-color:var(--border2);color:var(--text)}.flt.on{background:var(--s3);border-color:var(--border2);color:var(--text)}
-.lhead{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;padding:8px 14px;background:var(--s2);border-bottom:1px solid var(--border);font-weight:700}
-.cstat{display:flex;justify-content:space-between;align-items:center;padding:10px 15px;border-bottom:1px solid var(--border)}
-.cstat:last-child{border-bottom:none}.csl{font-size:12px;color:var(--muted)}.csv{font-size:13px;font-weight:600}
-.empty{padding:24px;text-align:center;color:var(--hint);font-size:12px}
+/* LAYER HEAD */
+.lhead{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;padding:6px 10px;background:var(--s2);border-bottom:1px solid var(--border);font-weight:700}
+/* CSTAT */
+.cstat{display:flex;justify-content:space-between;align-items:center;padding:7px 12px;border-bottom:1px solid var(--border)}
+.cstat:last-child{border-bottom:none}.csl{font-size:11px;color:var(--muted)}.csv{font-size:12px;font-weight:600}
+.empty{padding:18px;text-align:center;color:var(--hint);font-size:11px}
 .la-acquire{color:var(--cyan)}.la-reply{color:var(--amber)}.la-retain{color:var(--green)}
 .la-revenue{color:var(--teal)}.la-intel{color:var(--purple)}.la-partner{color:var(--orange)}.la-infra{color:var(--red)}
-::-webkit-scrollbar{width:4px;height:4px}::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar{width:3px;height:3px}
+::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
-@media(max-width:900px){.g5,.g4{grid-template-columns:repeat(2,1fr)}.g3,.g2,.g2l{grid-template-columns:1fr}.pipe{grid-template-columns:repeat(3,1fr)}}
 </style>
 </head>
 <body>
-<div class="nav">
-  <div class="nav-brand">
+<div class="topbar">
+  <div style="display:flex;align-items:center;gap:8px">
     <div class="logo">Sub<span>Draw</span></div>
-    <div class="tag">OPS CENTER</div>
+    <span style="font-size:9px;background:rgba(57,211,83,.1);color:var(--teal);border:1px solid rgba(57,211,83,.25);padding:1px 6px;border-radius:2px;letter-spacing:.06em">OPS CENTER</span>
     <div class="pulse"></div>
   </div>
-  <div class="nav-right">
-    <span class="clock" id="clk">—</span>
-    <button class="btn" onclick="load()">↻ Refresh</button>
+  <div class="topbar-r">
+    <span class="clk" id="clk">—</span>
+    <button class="rbtn" onclick="load()">↻ Refresh</button>
   </div>
 </div>
-<div class="tabs">
-  <button class="tab on" onclick="show('coo',this)">🧠 COO Intelligence</button>
-  <button class="tab" onclick="show('rev',this)">💰 Revenue</button>
-  <button class="tab" onclick="show('pipe',this)">📊 Pipeline</button>
-  <button class="tab" onclick="show('out',this)">✉️ Outreach</button>
-  <button class="tab" onclick="show('agt',this)">🤖 Agents (37)</button>
-  <button class="tab" onclick="show('hlth',this)">🏥 Health</button>
-</div>
-<div class="view on" id="v-coo">
-  <div class="g5">
-    <div class="met g"><div class="met-l">MRR</div><div class="met-v" id="cm-mrr">—</div><div class="met-s">monthly recurring</div></div>
-    <div class="met b"><div class="met-l">Pipeline</div><div class="met-v" id="cm-pipe">—</div><div class="met-s">total leads</div></div>
-    <div class="met p"><div class="met-l">Emails sent</div><div class="met-v" id="cm-sent">—</div><div class="met-s" id="cm-open">—</div></div>
-    <div class="met a"><div class="met-l">Replies</div><div class="met-v" id="cm-rep">—</div><div class="met-s" id="cm-rr">—</div></div>
-    <div class="met t"><div class="met-l">Signups 24h</div><div class="met-v" id="cm-sig">—</div><div class="met-s" id="cm-can">—</div></div>
+
+<div class="layout">
+  <div class="sidebar">
+    <div class="sb-label">Operations</div>
+    <button class="sb-btn on" onclick="show('coo',this)"><span class="sb-icon">🧠</span>COO Intel</button>
+    <button class="sb-btn" onclick="show('rev',this)"><span class="sb-icon">💰</span>Revenue</button>
+    <button class="sb-btn" onclick="show('pipe',this)"><span class="sb-icon">📊</span>Pipeline</button>
+    <button class="sb-btn" onclick="show('out',this)"><span class="sb-icon">✉️</span>Outreach</button>
+    <div class="sb-divider"></div>
+    <div class="sb-label">System</div>
+    <button class="sb-btn" onclick="show('agt',this)"><span class="sb-icon">🤖</span>Agents (37)</button>
+    <button class="sb-btn" onclick="show('hlth',this)"><span class="sb-icon">🏥</span>Health</button>
   </div>
-  <div class="launch">
-    <div class="launch-l"><div>
-      <div class="launch-t">🚀 SubDraw California GCs — Campaign Launch</div>
-      <div class="launch-s">Instantly auto-fires July 7, 2026 · 8 leads loaded · 4-email invoice protection sequence</div>
-    </div></div>
-    <div><div class="launch-days" id="cdown">—</div><div class="launch-dl">days to launch</div></div>
-  </div>
-  <div class="g2l">
-    <div class="card">
-      <div class="ch"><span class="ct">Strategic Moves — COO Intelligence</span><span id="coo-ct" style="font-size:11px;color:var(--muted)"></span></div>
-      <div id="coo-list"><div class="empty">Analyzing operation...</div></div>
+
+  <div class="content">
+
+    <!-- COO -->
+    <div class="view on" id="v-coo">
+      <div class="mg mg-5">
+        <div class="met g"><div class="ml">MRR</div><div class="mv" id="cm-mrr">—</div><div class="ms">monthly</div></div>
+        <div class="met b"><div class="ml">Pipeline</div><div class="mv" id="cm-pipe">—</div><div class="ms">total leads</div></div>
+        <div class="met p"><div class="ml">Emails sent</div><div class="mv" id="cm-sent">—</div><div class="ms" id="cm-open">—</div></div>
+        <div class="met a"><div class="ml">Replies</div><div class="mv" id="cm-rep">—</div><div class="ms" id="cm-rr">—</div></div>
+        <div class="met t"><div class="ml">Signups 24h</div><div class="mv" id="cm-sig">—</div><div class="ms" id="cm-can">—</div></div>
+      </div>
+      <div class="launch">
+        <div><div class="launch-t">🚀 SubDraw California GCs — Campaign Launch</div><div class="launch-s">Instantly auto-fires July 7, 2026 · 8 leads loaded · 4-email invoice protection sequence</div></div>
+        <div><div class="launch-days" id="cdown">—</div><div class="launch-dl">days to launch</div></div>
+      </div>
+      <div class="row2l">
+        <div class="card">
+          <div class="ch"><span class="ct">COO — Strategic Moves</span><span id="coo-ct" style="font-size:10px;color:var(--muted)"></span></div>
+          <div id="coo-list"><div class="empty">Analyzing...</div></div>
+        </div>
+        <div>
+          <div class="pipe">
+            <div class="stg sc"><div class="stg-l">Cold</div><div class="stg-n" id="cp-c">—</div><div class="stg-b"></div></div>
+            <div class="stg se"><div class="stg-l">Emailed</div><div class="stg-n" id="cp-e">—</div><div class="stg-b"></div></div>
+            <div class="stg sr"><div class="stg-l">Replied</div><div class="stg-n" id="cp-r">—</div><div class="stg-b"></div></div>
+            <div class="stg sd"><div class="stg-l">Demo</div><div class="stg-n" id="cp-d">—</div><div class="stg-b"></div></div>
+            <div class="stg su"><div class="stg-l">Customer</div><div class="stg-n" id="cp-u">—</div><div class="stg-b"></div></div>
+          </div>
+          <div class="card">
+            <div class="ch"><span class="ct">Health</span></div>
+            <div class="hgrid" id="h-mini"></div>
+          </div>
+        </div>
+      </div>
     </div>
-    <div>
+
+    <!-- REVENUE -->
+    <div class="view" id="v-rev">
+      <div class="mg mg-4">
+        <div class="met g"><div class="ml">MRR</div><div class="mv" id="rv-mrr">—</div><div class="ms" id="rv-arr">ARR: —</div></div>
+        <div class="met t"><div class="ml">Signups 24h</div><div class="mv" id="rv-sig">—</div><div class="ms">last 24 hours</div></div>
+        <div class="met"><div class="ml">Cancellations 24h</div><div class="mv" id="rv-can" style="color:var(--red)">—</div><div class="ms">last 24 hours</div></div>
+        <div class="met a"><div class="ml">Failed payments</div><div class="mv" id="rv-fail">—</div><div class="ms">recover today</div></div>
+      </div>
+      <div class="row2">
+        <div class="card"><div class="ch"><span class="ct">Plan targeting</span></div><div id="plan-tbl"></div></div>
+        <div class="card"><div class="ch"><span class="ct">Revenue summary</span></div><div id="rev-sum"></div></div>
+      </div>
+      <div class="card"><div class="ch"><span class="ct">Paying customers</span></div><div id="cust-tbl"><div class="empty">No customers yet — campaign launches July 7th</div></div></div>
+    </div>
+
+    <!-- PIPELINE -->
+    <div class="view" id="v-pipe">
       <div class="pipe">
-        <div class="stg sc"><div class="stg-l">Cold</div><div class="stg-n" id="cp-c">—</div><div class="stg-s">prospects</div><div class="stg-b"></div></div>
-        <div class="stg se"><div class="stg-l">Emailed</div><div class="stg-n" id="cp-e">—</div><div class="stg-s">in seq</div><div class="stg-b"></div></div>
-        <div class="stg sr"><div class="stg-l">Replied</div><div class="stg-n" id="cp-r">—</div><div class="stg-s">engaged</div><div class="stg-b"></div></div>
-        <div class="stg sd"><div class="stg-l">Demo</div><div class="stg-n" id="cp-d">—</div><div class="stg-s">visited</div><div class="stg-b"></div></div>
-        <div class="stg su"><div class="stg-l">Customer</div><div class="stg-n" id="cp-u">—</div><div class="stg-s">paying</div><div class="stg-b"></div></div>
+        <div class="stg sc"><div class="stg-l">Cold</div><div class="stg-n" id="pp-c">—</div><div class="stg-b"></div></div>
+        <div class="stg se"><div class="stg-l">Emailed</div><div class="stg-n" id="pp-e">—</div><div class="stg-b"></div></div>
+        <div class="stg sr"><div class="stg-l">Replied</div><div class="stg-n" id="pp-r">—</div><div class="stg-b"></div></div>
+        <div class="stg sd"><div class="stg-l">Demo visited</div><div class="stg-n" id="pp-d">—</div><div class="stg-b"></div></div>
+        <div class="stg su"><div class="stg-l">Customer</div><div class="stg-n" id="pp-u">—</div><div class="stg-b"></div></div>
       </div>
       <div class="card">
-        <div class="ch"><span class="ct">System Health</span></div>
-        <div class="hgrid" id="h-mini"></div>
+        <div class="ch"><span class="ct">All leads</span></div>
+        <div class="frow">
+          <button class="flt on" onclick="fLead('all',this)">All</button>
+          <button class="flt" onclick="fLead('hot',this)">Hot/Replied</button>
+          <button class="flt" onclick="fLead('sched',this)">Follow-up scheduled</button>
+          <button class="flt" onclick="fLead('sms',this)">SMS sent</button>
+          <button class="flt" onclick="fLead('cust',this)">Customers</button>
+        </div>
+        <div id="lead-tbl"></div>
       </div>
     </div>
-  </div>
-</div>
-<div class="view" id="v-rev">
-  <div class="g4">
-    <div class="met g"><div class="met-l">MRR</div><div class="met-v" id="rv-mrr">—</div><div class="met-s" id="rv-arr">ARR: —</div></div>
-    <div class="met t"><div class="met-l">Signups 24h</div><div class="met-v" id="rv-sig">—</div><div class="met-s">last 24 hours</div></div>
-    <div class="met"><div class="met-l">Cancellations 24h</div><div class="met-v" id="rv-can" style="color:var(--red)">—</div><div class="met-s">last 24 hours</div></div>
-    <div class="met a"><div class="met-l">Failed payments</div><div class="met-v" id="rv-fail">—</div><div class="met-s">recover today</div></div>
-  </div>
-  <div class="g2">
-    <div class="card"><div class="ch"><span class="ct">Plan targeting</span></div><div id="plan-tbl"></div></div>
-    <div class="card"><div class="ch"><span class="ct">Revenue summary</span></div><div id="rev-sum"></div></div>
-  </div>
-  <div class="card"><div class="ch"><span class="ct">Paying customers</span></div><div id="cust-tbl"><div class="empty">No customers yet — campaign launches July 7th</div></div></div>
-</div>
-<div class="view" id="v-pipe">
-  <div class="pipe">
-    <div class="stg sc"><div class="stg-l">Cold</div><div class="stg-n" id="pp-c">—</div><div class="stg-b"></div></div>
-    <div class="stg se"><div class="stg-l">Emailed</div><div class="stg-n" id="pp-e">—</div><div class="stg-b"></div></div>
-    <div class="stg sr"><div class="stg-l">Replied</div><div class="stg-n" id="pp-r">—</div><div class="stg-b"></div></div>
-    <div class="stg sd"><div class="stg-l">Demo visited</div><div class="stg-n" id="pp-d">—</div><div class="stg-b"></div></div>
-    <div class="stg su"><div class="stg-l">Customer</div><div class="stg-n" id="pp-u">—</div><div class="stg-b"></div></div>
-  </div>
-  <div class="card">
-    <div class="ch"><span class="ct">All leads</span></div>
-    <div class="frow">
-      <button class="flt on" onclick="fLead('all',this)">All</button>
-      <button class="flt" onclick="fLead('hot',this)">Hot / Replied</button>
-      <button class="flt" onclick="fLead('sched',this)">Scheduled follow-up</button>
-      <button class="flt" onclick="fLead('sms',this)">SMS sent</button>
-      <button class="flt" onclick="fLead('cust',this)">Customers</button>
+
+    <!-- OUTREACH -->
+    <div class="view" id="v-out">
+      <div class="mg mg-4">
+        <div class="met p"><div class="ml">Emails sent</div><div class="mv" id="oc-sent">—</div><div class="ms">campaign total</div></div>
+        <div class="met b"><div class="ml">Open rate</div><div class="mv" id="oc-open">—</div><div class="ms">industry avg 20%</div></div>
+        <div class="met a"><div class="ml">Reply rate</div><div class="mv" id="oc-rep">—</div><div class="ms">industry avg 3%</div></div>
+        <div class="met g"><div class="ml">Warmup score</div><div class="mv" id="oc-warm">—</div><div class="ms">need 70+ before launch</div></div>
+      </div>
+      <div class="row2">
+        <div class="card"><div class="ch"><span class="ct">Campaign — SubDraw California GCs</span></div><div id="camp-st"></div></div>
+        <div class="card"><div class="ch"><span class="ct">Scheduled follow-ups (Agent 32)</span></div><div id="fup-tbl"></div></div>
+      </div>
     </div>
-    <div id="lead-tbl"></div>
-  </div>
-</div>
-<div class="view" id="v-out">
-  <div class="g4">
-    <div class="met p"><div class="met-l">Emails sent</div><div class="met-v" id="oc-sent">—</div><div class="met-s">campaign total</div></div>
-    <div class="met b"><div class="met-l">Open rate</div><div class="met-v" id="oc-open">—</div><div class="met-s">industry avg 20%</div></div>
-    <div class="met a"><div class="met-l">Reply rate</div><div class="met-v" id="oc-rep">—</div><div class="met-s">industry avg 3%</div></div>
-    <div class="met g"><div class="met-l">Warmup score</div><div class="met-v" id="oc-warm">—</div><div class="met-s">need 70+ before launch</div></div>
-  </div>
-  <div class="g2">
-    <div class="card"><div class="ch"><span class="ct">Campaign — SubDraw California GCs</span></div><div id="camp-st"></div></div>
-    <div class="card"><div class="ch"><span class="ct">Scheduled follow-ups (Agent 32)</span></div><div id="fup-tbl"></div></div>
-  </div>
-</div>
-<div class="view" id="v-agt">
-  <div class="g4">
-    <div class="met t"><div class="met-l">Total agents</div><div class="met-v">37</div><div class="met-s">fully deployed</div></div>
-    <div class="met b"><div class="met-l">Railway services</div><div class="met-v">6</div><div class="met-s">fault isolated</div></div>
-    <div class="met g"><div class="met-l">Reply handler</div><div class="met-v">30m</div><div class="met-s">every 30 minutes</div></div>
-    <div class="met a"><div class="met-l">Next prospector</div><div class="met-v" id="ag-next">—</div><div class="met-s">Monday 6am</div></div>
-  </div>
-  <div class="card">
-    <div class="ch"><span class="ct">All 37 agents</span></div>
-    <div class="frow">
-      <button class="flt on" onclick="fAgt('all',this)">All layers</button>
-      <button class="flt" onclick="fAgt('acquire',this)">Acquire</button>
-      <button class="flt" onclick="fAgt('reply',this)">Reply</button>
-      <button class="flt" onclick="fAgt('retain',this)">Retain</button>
-      <button class="flt" onclick="fAgt('revenue',this)">Revenue</button>
-      <button class="flt" onclick="fAgt('intel',this)">Intelligence</button>
-      <button class="flt" onclick="fAgt('partner',this)">Partners</button>
-      <button class="flt" onclick="fAgt('infra',this)">Infra</button>
+
+    <!-- AGENTS -->
+    <div class="view" id="v-agt">
+      <div class="mg mg-4">
+        <div class="met t"><div class="ml">Total agents</div><div class="mv">37</div><div class="ms">deployed</div></div>
+        <div class="met b"><div class="ml">Services</div><div class="mv">6</div><div class="ms">Railway isolated</div></div>
+        <div class="met g"><div class="ml">Reply handler</div><div class="mv">30m</div><div class="ms">every 30 min</div></div>
+        <div class="met a"><div class="ml">Next prospector</div><div class="mv" id="ag-next">—</div><div class="ms">Monday 6am</div></div>
+      </div>
+      <div class="card">
+        <div class="ch"><span class="ct">All 37 agents</span></div>
+        <div class="frow">
+          <button class="flt on" onclick="fAgt('all',this)">All</button>
+          <button class="flt" onclick="fAgt('acquire',this)">Acquire</button>
+          <button class="flt" onclick="fAgt('reply',this)">Reply</button>
+          <button class="flt" onclick="fAgt('retain',this)">Retain</button>
+          <button class="flt" onclick="fAgt('revenue',this)">Revenue</button>
+          <button class="flt" onclick="fAgt('intel',this)">Intel</button>
+          <button class="flt" onclick="fAgt('partner',this)">Partners</button>
+          <button class="flt" onclick="fAgt('infra',this)">Infra</button>
+        </div>
+        <div id="agt-tbl"></div>
+      </div>
     </div>
-    <div id="agt-tbl"></div>
+
+    <!-- HEALTH -->
+    <div class="view" id="v-hlth">
+      <div class="mg mg-3">
+        <div class="card"><div class="ch"><span class="ct">API connections</span></div><div class="hgrid" id="api-h"></div></div>
+        <div class="card"><div class="ch"><span class="ct">Railway services</span></div><div id="svc-h"></div></div>
+        <div class="card"><div class="ch"><span class="ct">Critical checks</span></div><div id="crit-h"></div></div>
+      </div>
+    </div>
+
   </div>
 </div>
-<div class="view" id="v-hlth">
-  <div class="g3">
-    <div class="card"><div class="ch"><span class="ct">API connections</span></div><div class="hgrid" id="api-h"></div></div>
-    <div class="card"><div class="ch"><span class="ct">Railway services</span></div><div id="svc-h"></div></div>
-    <div class="card"><div class="ch"><span class="ct">Critical checks</span></div><div id="crit-h"></div></div>
-  </div>
-</div>
+
 <script>
 let D=null,lF='all',aF='all';
 const AGENTS=[
@@ -288,34 +328,37 @@ const AGENTS=[
   {id:'27',name:'Partner Prospector',layer:'partner',svc:'weekly-analyzer',sch:'Sun midnight',st:'scheduled'},
   {id:'25',name:'Health Monitor',layer:'infra',svc:'health-monitor',sch:'Every 60 min',st:'running'}
 ];
-function show(id,btn){document.querySelectorAll('.view').forEach(v=>v.classList.remove('on'));document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));document.getElementById('v-'+id).classList.add('on');btn.classList.add('on');}
+function show(id,btn){document.querySelectorAll('.view').forEach(v=>v.classList.remove('on'));document.querySelectorAll('.sb-btn').forEach(t=>t.classList.remove('on'));document.getElementById('v-'+id).classList.add('on');btn.classList.add('on');}
 function dTo(d){return Math.max(0,Math.ceil((new Date(d)-new Date())/86400000));}
 function fm(n){return n==null?'—':Number(n).toLocaleString();}
 function fmm(n){return n==null?'—':'$'+Number(n).toLocaleString();}
 function pct(n){return n==null?'—':n+'%';}
 function tier(l){if(l.tags.includes('customer'))return 'cust';if(l.tags.includes('replied')||l.tier==='hot')return 'hot';if(l.tier==='warm')return 'warm';return 'cold';}
-function tbdg(t){const m={cust:'bcu CUSTOMER',hot:'bh HOT',warm:'bw WARM',cold:'bc COLD'};const s=(m[t]||m.cold).split(' ');return '<span class="bdg '+s[0]+'">'+s[1]+'</span>';}
-function stbdg(s){if(s==='running')return '<span class="bdg brun">RUNNING</span>';if(s==='on-trigger')return '<span class="bdg btrg">ON TRIGGER</span>';return '<span class="bdg bsch">SCHEDULED</span>';}
-function layH(l){return '<span class="la-'+l+'" style="font-size:10px;font-weight:700;">'+l.toUpperCase()+'</span>';}
+function tbdg(t){const m={cust:'bcu CUST',hot:'bh HOT',warm:'bw WARM',cold:'bc COLD'};const s=(m[t]||m.cold).split(' ');return '<span class="bdg '+s[0]+'">'+s[1]+'</span>';}
+function stbdg(s){if(s==='running')return '<span class="bdg brun">RUN</span>';if(s==='on-trigger')return '<span class="bdg btrg">TRIG</span>';return '<span class="bdg bsch">SCHED</span>';}
+function layH(l){return '<span class="la-'+l+'" style="font-size:9px;font-weight:700;">'+l.toUpperCase()+'</span>';}
 function renderCOO(items){
   const ord={critical:0,high:1,medium:2,low:3};
   const sorted=[...items].sort((a,b)=>(ord[a.priority]||9)-(ord[b.priority]||9));
-  document.getElementById('coo-ct').textContent=items.length+' recommendations';
+  document.getElementById('coo-ct').textContent=items.length+' moves';
   const pc={critical:'p-crit',high:'p-high',medium:'p-med',low:'p-low'};
   const pt={critical:'pt-crit',high:'pt-high',medium:'pt-med',low:'pt-low'};
-  document.getElementById('coo-list').innerHTML=sorted.map(i=>`<div class="coo-item ${pc[i.priority]||'p-low'}"><div class="coo-pri"></div><div class="coo-icon">${i.icon}</div><div class="coo-body"><div class="coo-action">${i.action}</div><div class="coo-detail">${i.detail}</div><div class="coo-tags"><span class="ct-tag ${pt[i.priority]||'pt-low'}">${i.priority.toUpperCase()}</span><span class="ct-tag cat-${i.category}">${i.category.toUpperCase()}</span></div></div></div>`).join('');
+  document.getElementById('coo-list').innerHTML=sorted.map(i=>'<div class="coo-item '+( pc[i.priority]||'p-low')+'"><div class="coo-pri"></div><div class="coo-icon">'+i.icon+'</div><div class="coo-body"><div class="coo-action">'+i.action+'</div><div class="coo-detail">'+i.detail+'</div><div class="coo-tags"><span class="ct-tag '+(pt[i.priority]||'pt-low')+'">'+i.priority.toUpperCase()+'</span><span class="ct-tag cat-'+i.category+'">'+i.category.toUpperCase()+'</span></div></div></div>').join('');
 }
-function renderHMini(h){const items=[{name:'GHL',ok:h.ghl},{name:'Instantly',ok:h.instantly},{name:'Stripe',ok:h.stripe},{name:'Anthropic',ok:h.anthropic},{name:'Apollo',ok:h.apollo},{name:'Railway',ok:true}];document.getElementById('h-mini').innerHTML=items.map(i=>`<div class="hitem"><span class="hdot ${i.ok?'hok':'herr'}"></span><div><div class="hname">${i.name}</div><div class="hst">${i.ok?'Connected':'Error'}</div></div></div>`).join('');}
+function renderHMini(h){
+  const items=[{name:'GHL',ok:h.ghl},{name:'Instantly',ok:h.instantly},{name:'Stripe',ok:h.stripe},{name:'Anthropic',ok:h.anthropic},{name:'Apollo',ok:h.apollo},{name:'Railway',ok:true}];
+  document.getElementById('h-mini').innerHTML=items.map(i=>'<div class="hitem"><span class="hdot '+(i.ok?'hok':'herr')+'"></span><div><div class="hname">'+i.name+'</div><div class="hst">'+(i.ok?'OK':'Error')+'</div></div></div>').join('');
+}
 function renderLeads(leads,filter){
   lF=filter;
   let f=leads;
-  if(filter==='hot')f=leads.filter(l=>l.tier==='hot'||l.tags.includes('replied'));
+  if(filter==='hot')f=leads.filter(l=>l.tags.includes('replied')||l.tier==='hot');
   else if(filter==='sched')f=leads.filter(l=>l.followup);
   else if(filter==='sms')f=leads.filter(l=>l.sms);
   else if(filter==='cust')f=leads.filter(l=>l.tags.includes('customer'));
   const el=document.getElementById('lead-tbl');
   if(!f.length){el.innerHTML='<div class="empty">No leads in this filter.</div>';return;}
-  el.innerHTML=`<table><thead><tr><th>Contact</th><th>Company</th><th>Plan</th><th>Score</th><th>Status</th><th>Follow-up</th><th>SMS</th></tr></thead><tbody>${f.map(l=>`<tr><td><div class="tp">${l.name}</div><div class="tm">${l.email}</div></td><td class="tp">${l.company}</td><td style="font-size:11px;color:var(--muted)">${l.plan||'—'}</td><td style="font-weight:700;color:var(--amber)">${l.score}</td><td>${tbdg(tier(l))}</td><td style="font-size:11px;color:${l.followup?'var(--teal)':'var(--hint)'}">${l.followup||'—'}</td><td style="font-size:11px;color:${l.sms?'var(--green)':'var(--hint)'}">${l.sms?'✓':'—'}</td></tr>`).join('')}</tbody></table>`;
+  el.innerHTML='<table><thead><tr><th>Contact</th><th>Company</th><th>Plan</th><th>Score</th><th>Status</th><th>Follow-up</th><th>SMS</th></tr></thead><tbody>'+f.map(l=>'<tr><td><div class="tp">'+l.name+'</div><div class="tm">'+l.email+'</div></td><td class="tp">'+l.company+'</td><td style="font-size:10px;color:var(--muted)">'+(l.plan||'—')+'</td><td style="font-weight:700;color:var(--amber)">'+(l.score||'—')+'</td><td>'+tbdg(tier(l))+'</td><td style="font-size:10px;color:'+(l.followup?'var(--teal)':'var(--hint)')+'>'+(l.followup||'—')+'</td><td style="color:'+(l.sms?'var(--green)':'var(--hint)')+'>'+(l.sms?'✓':'—')+'</td></tr>').join('')+'</tbody></table>';
 }
 function fLead(f,btn){document.querySelectorAll('#v-pipe .flt').forEach(b=>b.classList.remove('on'));btn.classList.add('on');if(D)renderLeads(D.leads,f);}
 function renderAgents(filter){
@@ -328,12 +371,12 @@ function renderAgents(filter){
     layers.forEach(layer=>{
       const grp=filtered.filter(a=>a.layer===layer);
       if(!grp.length)return;
-      html+=`<div class="lhead">${layer.toUpperCase()} — ${grp.length} agents</div>`;
-      grp.forEach(a=>{html+=`<tr><td style="font-family:monospace;color:var(--hint);font-size:11px;width:36px">${a.id}</td><td class="tp">${a.name}</td><td>${layH(a.layer)}</td><td style="font-size:11px;color:var(--muted)">${a.svc}</td><td style="font-size:11px;color:var(--hint)">${a.sch}</td><td>${stbdg(a.st)}</td></tr>`;});
+      html+='<div class="lhead">'+layer.toUpperCase()+' — '+grp.length+' agents</div>';
+      grp.forEach(a=>{html+='<tr><td style="font-family:monospace;color:var(--hint);font-size:10px;width:30px">'+a.id+'</td><td class="tp">'+a.name+'</td><td>'+layH(a.layer)+'</td><td style="font-size:10px;color:var(--muted)">'+a.svc+'</td><td style="font-size:10px;color:var(--hint)">'+a.sch+'</td><td>'+stbdg(a.st)+'</td></tr>';});
     });
     el.innerHTML='<table><thead><tr><th>#</th><th>Agent</th><th>Layer</th><th>Service</th><th>Schedule</th><th>Status</th></tr></thead><tbody>'+html+'</tbody></table>';
   }else{
-    el.innerHTML=`<table><thead><tr><th>#</th><th>Agent</th><th>Service</th><th>Schedule</th><th>Status</th></tr></thead><tbody>${filtered.map(a=>`<tr><td style="font-family:monospace;color:var(--hint);font-size:11px">${a.id}</td><td class="tp">${a.name}</td><td style="font-size:11px;color:var(--muted)">${a.svc}</td><td style="font-size:11px;color:var(--hint)">${a.sch}</td><td>${stbdg(a.st)}</td></tr>`).join('')}</tbody></table>`;
+    el.innerHTML='<table><thead><tr><th>#</th><th>Agent</th><th>Service</th><th>Schedule</th><th>Status</th></tr></thead><tbody>'+filtered.map(a=>'<tr><td style="font-family:monospace;color:var(--hint);font-size:10px">'+a.id+'</td><td class="tp">'+a.name+'</td><td style="font-size:10px;color:var(--muted)">'+a.svc+'</td><td style="font-size:10px;color:var(--hint)">'+a.sch+'</td><td>'+stbdg(a.st)+'</td></tr>').join('')+'</tbody></table>';
   }
 }
 function fAgt(f,btn){document.querySelectorAll('#v-agt .flt').forEach(b=>b.classList.remove('on'));btn.classList.add('on');renderAgents(f);}
@@ -345,37 +388,37 @@ async function load(){
     const tot=Object.values(D.pipeline).reduce((a,b)=>a+b,0);
     document.getElementById('cm-pipe').textContent=fm(tot);
     document.getElementById('cm-sent').textContent=fm(D.campaign.sent);
-    document.getElementById('cm-open').textContent=pct(D.campaign.open_rate)+' open rate';
+    document.getElementById('cm-open').textContent=pct(D.campaign.open_rate)+' open';
     document.getElementById('cm-rep').textContent=fm(D.campaign.replies);
-    document.getElementById('cm-rr').textContent=pct(D.campaign.reply_rate)+' reply rate';
-    document.getElementById('cm-sig').textContent=fm(D.revenue.signups_24h);
-    document.getElementById('cm-can').textContent=(D.revenue.cancels_24h||0)+' cancels';
+    document.getElementById('cm-rr').textContent=pct(D.campaign.reply_rate)+' rate';
+    document.getElementById('cm-sig').textContent=fm(D.revenue.new_signups||D.revenue.signups_24h);
+    document.getElementById('cm-can').textContent=(D.revenue.cancellations||D.revenue.cancels_24h||0)+' cancels';
     document.getElementById('cdown').textContent=dTo('2026-07-07');
-    renderCOO(D.coo);
+    if(D.coo) renderCOO(D.coo);
     [['cp-c','cold'],['cp-e','emailed'],['cp-r','replied'],['cp-d','demo'],['cp-u','customer']].forEach(([id,k])=>document.getElementById(id).textContent=fm(D.pipeline[k]));
     renderHMini(D.health);
     document.getElementById('rv-mrr').textContent=fmm(D.revenue.mrr);
-    document.getElementById('rv-arr').textContent='ARR: '+fmm(D.revenue.arr);
-    document.getElementById('rv-sig').textContent=fm(D.revenue.signups_24h);
-    document.getElementById('rv-can').textContent=fm(D.revenue.cancels_24h);
-    document.getElementById('rv-fail').textContent=fm(D.revenue.failed_24h);
+    document.getElementById('rv-arr').textContent='ARR: '+fmm((D.revenue.arr||(D.revenue.mrr*12)));
+    document.getElementById('rv-sig').textContent=fm(D.revenue.new_signups||D.revenue.signups_24h);
+    document.getElementById('rv-can').textContent=fm(D.revenue.cancellations||D.revenue.cancels_24h);
+    document.getElementById('rv-fail').textContent=fm(D.revenue.failed_payments||D.revenue.failed_24h);
     const pc=D.leads.reduce((a,l)=>{const p=l.plan||'unknown';a[p]=(a[p]||0)+1;return a;},{});
-    document.getElementById('plan-tbl').innerHTML='<table><thead><tr><th>Plan</th><th>Leads</th><th>Value/mo</th><th>Pipeline potential</th></tr></thead><tbody>'+Object.entries(pc).map(([p,c])=>{const v={scale:599,professional:299,starter:149}[p]||0;return `<tr><td class="tp">${p}</td><td>${c}</td><td style="color:var(--green)">$${v}</td><td style="color:var(--teal);font-weight:600">$${(v*c).toLocaleString()}/mo</td></tr>`;}).join('')+'</tbody></table>';
-    document.getElementById('rev-sum').innerHTML=[['MRR',fmm(D.revenue.mrr)],['ARR',fmm(D.revenue.arr)],['Signups 24h',fm(D.revenue.signups_24h)],['Cancels 24h',fm(D.revenue.cancels_24h)],['Failed payments',fm(D.revenue.failed_24h)]].map(([l,v])=>`<div class="cstat"><span class="csl">${l}</span><span class="csv">${v}</span></div>`).join('');
+    document.getElementById('plan-tbl').innerHTML='<table><thead><tr><th>Plan</th><th>Leads</th><th>/mo</th><th>Potential</th></tr></thead><tbody>'+Object.entries(pc).map(([p,c])=>{const v={scale:599,professional:299,starter:149}[p]||0;return '<tr><td class="tp">'+p+'</td><td>'+c+'</td><td style="color:var(--green)">$'+v+'</td><td style="color:var(--teal);font-weight:600">$'+(v*c).toLocaleString()+'</td></tr>';}).join('')+'</tbody></table>';
+    document.getElementById('rev-sum').innerHTML=[['MRR',fmm(D.revenue.mrr)],['ARR',fmm(D.revenue.arr||(D.revenue.mrr*12))],['Signups 24h',fm(D.revenue.new_signups||D.revenue.signups_24h)],['Cancels 24h',fm(D.revenue.cancellations||D.revenue.cancels_24h)],['Failed',fm(D.revenue.failed_payments||D.revenue.failed_24h)]].map(([l,v])=>'<div class="cstat"><span class="csl">'+l+'</span><span class="csv">'+v+'</span></div>').join('');
     [['pp-c','cold'],['pp-e','emailed'],['pp-r','replied'],['pp-d','demo'],['pp-u','customer']].forEach(([id,k])=>document.getElementById(id).textContent=fm(D.pipeline[k]));
     renderLeads(D.leads,lF);
     document.getElementById('oc-sent').textContent=fm(D.campaign.sent);
     document.getElementById('oc-open').textContent=pct(D.campaign.open_rate);
     document.getElementById('oc-rep').textContent=pct(D.campaign.reply_rate);
     const ws=D.campaign.warmup;const wel=document.getElementById('oc-warm');wel.textContent=ws||'—';wel.style.color=ws?(ws>=80?'var(--green)':ws>=70?'var(--amber)':'var(--red)'):'var(--muted)';
-    document.getElementById('camp-st').innerHTML=[['Campaign','SubDraw California GCs'],['Status',D.campaign.status||'Warming'],['Emails sent',fm(D.campaign.sent)],['Opens',fm(D.campaign.opens)+' ('+pct(D.campaign.open_rate)+')'],['Replies',fm(D.campaign.replies)+' ('+pct(D.campaign.reply_rate)+')'],['Warmup',ws?(ws+'/100'):'—'],['Launch','July 7, 2026 (auto)']].map(([l,v])=>`<div class="cstat"><span class="csl">${l}</span><span class="csv">${v}</span></div>`).join('');
-    const fups=D.leads.filter(l=>l.followup);document.getElementById('fup-tbl').innerHTML=fups.length?`<table><thead><tr><th>Contact</th><th>Company</th><th>Date</th></tr></thead><tbody>${fups.map(l=>`<tr><td class="tp">${l.name}</td><td class="tm">${l.company}</td><td style="color:var(--teal)">${l.followup}</td></tr>`).join('')}</tbody></table>`:'<div class="empty">Agent 32 schedules follow-ups when GCs reply not now.</div>';
-    const now=new Date();const day=now.getDay();document.getElementById('ag-next').textContent=(day===1?7:(8-day)%7)+'d';
+    document.getElementById('camp-st').innerHTML=[['Campaign','SubDraw California GCs'],['Status',D.campaign.status||'Warming'],['Sent',fm(D.campaign.sent)],['Opens',fm(D.campaign.opens)+' ('+pct(D.campaign.open_rate)+')'],['Replies',fm(D.campaign.replies)+' ('+pct(D.campaign.reply_rate)+')'],['Warmup',ws?(ws+'/100'):'—'],['Launch','July 7, 2026 (auto)']].map(([l,v])=>'<div class="cstat"><span class="csl">'+l+'</span><span class="csv">'+v+'</span></div>').join('');
+    const fups=(D.leads||[]).filter(l=>l.followup);document.getElementById('fup-tbl').innerHTML=fups.length?'<table><thead><tr><th>Contact</th><th>Company</th><th>Date</th></tr></thead><tbody>'+fups.map(l=>'<tr><td class="tp">'+l.name+'</td><td class="tm">'+l.company+'</td><td style="color:var(--teal)">'+l.followup+'</td></tr>').join('')+'</tbody></table>':'<div class="empty">Agent 32 schedules follow-ups when GCs reply not now.</div>';
+    const now=new Date();document.getElementById('ag-next').textContent=((now.getDay()===1?7:(8-now.getDay())%7)||7)+'d';
     renderAgents(aF);
     const apis=[{name:'GoHighLevel',k:'ghl'},{name:'Instantly',k:'instantly'},{name:'Stripe',k:'stripe'},{name:'Anthropic',k:'anthropic'},{name:'Apollo',k:'apollo'},{name:'Railway',k:'apollo'}];
-    document.getElementById('api-h').innerHTML=apis.map(a=>`<div class="hitem"><span class="hdot ${D.health[a.k]?'hok':'herr'}"></span><div><div class="hname">${a.name}</div><div class="hst">${D.health[a.k]?'Connected':'Error'}</div></div></div>`).join('');
-    document.getElementById('svc-h').innerHTML=['health-monitor','reply-handler','revenue-monitor','daily-briefing','prospector','weekly-analyzer'].map(s=>`<div class="cstat"><span class="csl">${s}</span><span class="bdg bon">ONLINE</span></div>`).join('');
-    document.getElementById('crit-h').innerHTML=[{l:'Env vars loaded',ok:D.health.anthropic&&D.health.ghl},{l:'Reply handler running',ok:true},{l:'Revenue monitor active',ok:true},{l:'Health monitor hourly',ok:true},{l:'Prospector Monday 6am',ok:true},{l:'July 7 launch configured',ok:dTo('2026-07-07')>0}].map(c=>`<div class="cstat"><span class="csl">${c.l}</span><span class="hdot ${c.ok?'hok':'herr'}" style="display:inline-block"></span></div>`).join('');
+    document.getElementById('api-h').innerHTML=apis.map(a=>'<div class="hitem"><span class="hdot '+(D.health[a.k]?'hok':'herr')+'"></span><div><div class="hname">'+a.name+'</div><div class="hst">'+(D.health[a.k]?'OK':'Error')+'</div></div></div>').join('');
+    document.getElementById('svc-h').innerHTML=['health-monitor','reply-handler','revenue-monitor','daily-briefing','prospector','weekly-analyzer'].map(s=>'<div class="cstat"><span class="csl">'+s+'</span><span class="bdg bon">ONLINE</span></div>').join('');
+    document.getElementById('crit-h').innerHTML=[{l:'Env vars loaded',ok:D.health.anthropic&&D.health.ghl},{l:'Reply handler running',ok:true},{l:'Revenue monitor active',ok:true},{l:'Health monitor hourly',ok:true},{l:'Prospector Mon 6am',ok:true},{l:'July 7 launch configured',ok:dTo('2026-07-07')>0}].map(c=>'<div class="cstat"><span class="csl">'+c.l+'</span><span class="hdot '+(c.ok?'hok':'herr')+'" style="display:inline-block"></span></div>').join('');
     document.getElementById('clk').textContent='Updated '+new Date().toLocaleTimeString();
   }catch(e){document.getElementById('clk').textContent='Error: '+e.message;console.error(e);}
 }
