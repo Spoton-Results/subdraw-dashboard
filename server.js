@@ -22,7 +22,7 @@ async function callGHL(endpoint) {
 // Instantly helper
 async function callInstantly(endpoint) {
   const fetch = (await import('node-fetch')).default;
-  const res = await fetch('https://api.instantly.ai/api/v1' + endpoint, {
+  const res = await fetch('https://api.instantly.ai/api/v2' + endpoint, {
     headers: {
       'Authorization': 'Bearer ' + process.env.INSTANTLY_API_KEY,
       'Content-Type': 'application/json'
@@ -73,7 +73,7 @@ app.get('/api/dashboard', async (req, res) => {
   try {
     const locationId = process.env.GHL_LOCATION_ID || 'oe1TpmlDynQGFNdYLkaK';
     const pipelineId = process.env.GHL_PIPELINE_ID || 'lu4BTmjYjJC2hZVKxj1t';
-    const opps = await callGHL('/opportunities/search?pipeline_id=' + pipelineId + '&locationId=' + locationId + '&limit=100');
+    const opps = await callGHL('/opportunities/search?pipeline_id=' + pipelineId + '&location_id=' + locationId + '&limit=100');
     const opportunities = opps.opportunities || [];
 
     const stageMap = {
@@ -111,15 +111,20 @@ app.get('/api/dashboard', async (req, res) => {
   // Instantly campaign
   try {
     const campaignId = process.env.INSTANTLY_CAMPAIGN_ID || 'bb1d4655-8d06-4218-89d4-ec196bc8ca81';
-    const analytics = await callInstantly('/analytics/campaign?campaign_id=' + campaignId);
+    const analyticsRaw = await callInstantly('/campaigns/analytics?id=' + campaignId);
+    const analytics = Array.isArray(analyticsRaw) ? (analyticsRaw[0] || {}) : analyticsRaw;
+    const sent = analytics.emails_sent_count || 0;
+    const opens = analytics.open_count || 0;
+    const replies = analytics.reply_count || 0;
+    const statusMap = { 0: 'draft', 1: 'active', 2: 'paused', 3: 'completed' };
     data.campaign = {
-      sent: analytics.total_emails_sent || 0,
-      opens: analytics.total_opened || 0,
-      replies: analytics.total_replied || 0,
-      open_rate: Math.round((analytics.open_rate || 0) * 100) / 100,
-      reply_rate: Math.round((analytics.reply_rate || 0) * 100) / 100,
+      sent,
+      opens,
+      replies,
+      open_rate: sent ? Math.round((opens / sent) * 10000) / 100 : 0,
+      reply_rate: sent ? Math.round((replies / sent) * 10000) / 100 : 0,
       launch_date: '2026-07-07',
-      status: analytics.status || 'warming'
+      status: statusMap[analytics.campaign_status] || 'warming'
     };
     data.health.instantly = true;
   } catch(e) { console.error('Instantly error:', e.message); }
