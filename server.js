@@ -793,28 +793,18 @@ app.post('/api/upload-csv', upload.single('file'), async (req, res) => {
 
   for (const p of prospects) {
     try {
-      // Push to GHL
-      const contactRes = await ghl('/contacts/', 'POST', {
-        locationId: locId,
-        firstName: p.first_name,
-        lastName: p.last_name,
-        name: p.name,
-        companyName: p.company,
-        email: p.email,
-        phone: p.phone,
-        website: p.website,
-        address1: p.address,
-        city: p.city,
-        state: p.state,
-        postalCode: p.zip,
-        source: 'CSV Upload',
-        tags: ['csv-upload', 'ca-gc', 'cold-outreach', 'agent-outreach', 'gc-prospect', 'subdraw-ca'],
-        customFields: [
-          { key: 'license_number', field_value: p.license },
-          { key: 'csv_rating', field_value: p.rating },
-          { key: 'csv_reviews', field_value: p.reviews }
-        ].filter(f => f.field_value)
-      });
+      // Push to GHL — only send fields GHL v2 accepts, strip nulls/empty
+      const contactPayload = { locationId: locId, source: 'CSV Upload',
+        tags: ['csv-upload', 'ca-gc', 'cold-outreach', 'agent-outreach', 'gc-prospect', 'subdraw-ca'] };
+      if (p.first_name) contactPayload.firstName = p.first_name;
+      if (p.last_name)  contactPayload.lastName  = p.last_name;
+      if (p.email)      contactPayload.email      = p.email;
+      if (p.phone)      contactPayload.phone      = p.phone;
+      if (p.company)    contactPayload.companyName = p.company;
+      if (p.website)    contactPayload.website    = p.website;
+      if (p.city)       contactPayload.city       = p.city;
+      if (p.state)      contactPayload.state      = p.state;
+      const contactRes = await ghl('/contacts/', 'POST', contactPayload);
 
       const contactId = contactRes.contact?.id;
       if (contactId) {
