@@ -588,67 +588,87 @@ Return [] if no GC companies found. Never include specialty-only trades.`
 const multer = require('multer');
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
-// Parse any CSV format into normalized prospect objects
+// Parse any CSV — handles Vibe exports with JSON arrays in fields
 function parseCSV(text) {
-  const lines = text.trim().split(/\r?\n/).filter(Boolean);
-  if (lines.length < 2) return [];
+  const lines2 = text.trim().split(/\r?\n/).filter(Boolean);
+  if (lines2.length < 2) return [];
+  const delim = lines2[0].includes('\t') ? '\t' : ',';
 
-  // Detect delimiter
-  const delim = lines[0].includes('\t') ? '\t' : ',';
-
-  // Parse header — normalize column names
-  const raw_headers = lines[0].split(delim).map(h => h.replace(/^["']|["']$/g, '').trim().toLowerCase());
-
+  // Normalize header names
   const normalize = h => {
-    if (/first.?name|fname/.test(h)) return 'first_name';
-    if (/last.?name|lname|surname/.test(h)) return 'last_name';
-    if (/^name$|full.?name|contact.?name|owner/.test(h)) return 'name';
-    if (/company|business|organization|org.?name/.test(h)) return 'company';
-    if (/email|e-mail/.test(h)) return 'email';
-    if (/phone|mobile|cell|tel/.test(h)) return 'phone';
-    if (/website|url|web|site/.test(h)) return 'website';
-    if (/city|town/.test(h)) return 'city';
-    if (/state|province/.test(h)) return 'state';
-    if (/zip|postal/.test(h)) return 'zip';
-    if (/title|position|role/.test(h)) return 'title';
-    if (/license|lic/.test(h)) return 'license';
-    if (/rating|stars/.test(h)) return 'rating';
-    if (/reviews|review.?count/.test(h)) return 'reviews';
-    if (/address|addr/.test(h)) return 'address';
+    h = h.toLowerCase().replace(/^["']|["']$/g,'').trim();
+    if (/first.?name|fname|prospect_first/.test(h)) return 'first_name';
+    if (/last.?name|lname|prospect_last/.test(h)) return 'last_name';
+    if (/full.?name|prospect_full/.test(h)) return 'full_name';
+    if (/company.*(name|website.*no)|prospect_company_name/.test(h)) return 'company';
+    if (/company.*website|prospect_company_web/.test(h)) return 'website';
+    if (/contact_professions_email|professional.*email/.test(h)) return 'pro_email';
+    if (/contact_emails/.test(h)) return 'emails_json';
+    if (/contact_mobile/.test(h)) return 'mobile';
+    if (/contact_phone/.test(h)) return 'phones_json';
+    if (/^email/.test(h)) return 'email';
+    if (/^phone|^tel|^cell/.test(h)) return 'phone';
+    if (/prospect_city|^city/.test(h)) return 'city';
+    if (/prospect_region|^state/.test(h)) return 'state';
+    if (/job_title|^title/.test(h)) return 'title';
+    if (/prospect_job_title/.test(h)) return 'title';
     return h;
   };
 
-  const headers = raw_headers.map(normalize);
+  const headers = lines2[0].split(delim).map(normalize);
 
-  return lines.slice(1).map(line => {
-    const vals = line.split(delim).map(v => v.replace(/^["']|["']$/g, '').trim());
+  // Extract email from Vibe JSON: [{"address":"x@y.com","type":"current_professional"}]
+  function extractEmail(emailsJson, proEmail) {
+    if (proEmail && proEmail.includes('@') && !proEmail.startsWith('[') && !proEmail.startsWith('{')) return proEmail.trim();
+    if (!emailsJson) return '';
+    const match = emailsJson.match(/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/);
+    return match ? match[0] : '';
+  }
+
+  // Extract phone from Vibe JSON: [{"phone_number":"+15551234567"}]
+  function extractPhone(phonesJson, mobile) {
+    if (mobile && mobile.match(/^\+?\d{10,}/)) return mobile.trim();
+    if (!phonesJson) return '';
+    const match = phonesJson.match(/\+\d{10,}/);
+    return match ? match[0] : (mobile || '');
+  }
+
+  // Parse CSV line respecting quoted fields with embedded commas
+  function parseLine(line) {
+    const vals = []; let cur = '', inQ = false;
+    for (let i = 0; i < line.length; i++) {
+      if (line[i] === '"') { inQ = !inQ; }
+      else if (line[i] === delim && !inQ) { vals.push(cur); cur = ''; }
+      else { cur += line[i]; }
+    }
+    vals.push(cur);
+    return vals.map(v => v.trim());
+  }
+
+  return lines2.slice(1).map(line => {
+    const vals = parseLine(line);
     const row = {};
-    headers.forEach((h, i) => { if (vals[i]) row[h] = vals[i]; });
+    headers.forEach((h, i) => { if (vals[i] !== undefined && vals[i] !== '') row[h] = vals[i]; });
 
-    // Build normalized prospect
-    const first = row.first_name || '';
-    const last = row.last_name || '';
-    const fullName = row.name || (first + ' ' + last).trim() || row.company || '';
+    const email = extractEmail(row.emails_json, row.pro_email || row.email || '');
+    const phone = extractPhone(row.phones_json, row.mobile || row.phone || '');
+    const first = row.first_name || (row.full_name || '').split(' ')[0] || '';
+    const last  = row.last_name  || (row.full_name || '').split(' ').slice(1).join(' ') || '';
+    const name  = row.full_name  || (first + ' ' + last).trim() || row.company || '';
+    const company = row.company || name || '';
 
-    return {
-      name: fullName,
-      first_name: first || fullName.split(' ')[0] || '',
-      last_name: last || fullName.split(' ').slice(1).join(' ') || '',
-      title: row.title || 'Owner',
-      email: row.email || '',
-      phone: row.phone || '',
-      website: row.website || '',
-      company: row.company || row.organization || fullName,
-      city: row.city || '',
-      state: row.state || 'California',
-      zip: row.zip || '',
-      address: row.address || '',
-      license: row.license || '',
-      rating: row.rating || '',
-      reviews: row.reviews || '',
-      source: 'csv_upload'
-    };
-  }).filter(p => p.company || p.email || p.phone);
+    // Skip JSON garbage rows and rows with nothing useful
+    if (!email && !phone) return null;
+    if (!company || company.startsWith('[') || company.startsWith('{')) return null;
+
+    const stateRaw = (row.state || 'CA');
+    const stateMap = { california:'CA', utah:'UT', texas:'TX', florida:'FL', arizona:'AZ' };
+    const state = stateMap[stateRaw.toLowerCase()] || stateRaw.substring(0,2).toUpperCase() || 'CA';
+
+    return { name, first_name: first, last_name: last, title: row.title || 'Owner',
+             email, phone, website: row.website || '', company, city: row.city || '',
+             state, zip: '', address: '', source: 'csv_upload' };
+  }).filter(Boolean);
 }
 
 // POST /api/upload-csv — parse CSV and push to GHL + Instantly
