@@ -247,6 +247,7 @@ tr:hover td{background:rgba(255,255,255,.015)}
     <button class="sb-btn" data-tip="Health" onclick="nav('hlth',this)"><span>🏥</span><span class="sb-label">Health</span></button>
     <div class="sb-divider"></div>
     <div class="sb-section">Import</div>
+    <button class="sb-btn" data-tip="Scrape URL" onclick="nav('scrape',this)"><span>🕷️</span><span class="sb-label">Scrape URL</span></button>
     <button class="sb-btn" data-tip="Upload CSV" onclick="nav('upload',this)"><span>📤</span><span class="sb-label">Upload CSV</span></button>
     <button class="sb-btn" data-tip="Live Activity" onclick="nav('activity',this)" id="sb-activity"><span>⚡</span><span class="sb-label">Live Activity</span></button>
   </nav>
@@ -395,6 +396,50 @@ tr:hover td{background:rgba(255,255,255,.015)}
       </div>
     </div>
 
+    <!-- URL SCRAPER -->
+    <div class="view" id="v-scrape">
+      <div class="card" style="margin-bottom:12px">
+        <div class="card-head"><span class="card-title">🕷️ Web Intelligence Scraper</span></div>
+        <div style="padding:16px">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.7">
+            Paste any URL containing GC contacts — contractor directories, state license boards, association pages, permit databases, chamber directories — and AI extracts every contact and loads them into your pipeline automatically.
+          </div>
+          <div style="display:flex;gap:8px;margin-bottom:10px">
+            <input id="scrape-url" type="url" placeholder="https://www.buildzoom.com/contractors/california" 
+              style="flex:1;background:var(--s2);border:1px solid var(--border2);border-radius:6px;padding:9px 12px;color:var(--text);font-family:inherit;font-size:12px;outline:none"
+              onkeydown="if(event.key==='Enter')startScrape()">
+            <button onclick="startScrape()" id="scrape-btn"
+              style="background:var(--teal);color:#000;border:none;border-radius:6px;padding:9px 18px;font-weight:700;font-size:12px;font-family:inherit;cursor:pointer;white-space:nowrap">
+              Scrape →
+            </button>
+          </div>
+          <div style="font-size:11px;color:var(--hint);line-height:1.8">
+            Try these: buildzoom.com/contractors/california &nbsp;·&nbsp; 
+            houzz.com/professionals/general-contractor &nbsp;·&nbsp;
+            angieslist.com/companylist/general-contractor &nbsp;·&nbsp;
+            Any state licensing board URL
+          </div>
+        </div>
+      </div>
+
+      <div id="scrape-status" style="display:none" class="card" style="margin-bottom:12px">
+        <div class="card-head">
+          <span class="card-title">Progress</span>
+          <span id="scrape-stats" style="font-size:11px;color:var(--muted)"></span>
+        </div>
+        <div style="padding:12px 14px">
+          <div id="scrape-log" style="font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace;line-height:1.9;max-height:120px;overflow-y:auto"></div>
+        </div>
+      </div>
+
+      <div id="scrape-results" style="display:none" class="card">
+        <div class="card-head">
+          <span class="card-title">Contacts found</span>
+          <span id="scrape-result-count" style="font-size:11px;color:var(--muted)"></span>
+        </div>
+        <div id="scrape-result-table"></div>
+      </div>
+    </div>
     <!-- CSV UPLOAD -->
     <div class="view" id="v-upload">
       <div class="card" style="margin-bottom:14px">
@@ -786,6 +831,103 @@ async function uploadCSV() {
   }
 }
 
+
+
+// ── URL SCRAPER ──────────────────────────────────────────────────────
+let scrapeContacts = [];
+
+async function startScrape() {
+  const url = document.getElementById('scrape-url').value.trim();
+  if (!url) return;
+
+  const btn = document.getElementById('scrape-btn');
+  btn.textContent = 'Scraping...';
+  btn.disabled = true;
+  btn.style.background = 'var(--s3)';
+  btn.style.color = 'var(--muted)';
+
+  scrapeContacts = [];
+  document.getElementById('scrape-status').style.display = 'block';
+  document.getElementById('scrape-results').style.display = 'none';
+  document.getElementById('scrape-log').innerHTML = '';
+  document.getElementById('scrape-stats').textContent = '';
+
+  const log = (msg, color) => {
+    const el = document.getElementById('scrape-log');
+    el.innerHTML += '<div style="color:' + (color||'var(--muted)') + '">' + msg + '</div>';
+    el.scrollTop = el.scrollHeight;
+  };
+
+  try {
+    const res = await fetch('/api/scrape-url', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url })
+    });
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        try {
+          const msg = JSON.parse(line.substring(6));
+
+          if (msg.type === 'start') {
+            log('🔍 ' + msg.message, 'var(--text)');
+          } else if (msg.type === 'progress') {
+            log('⚙️ ' + msg.message);
+          } else if (msg.type === 'contact') {
+            const c = msg.contact;
+            scrapeContacts.push(c);
+            log('✓ Found: ' + c.organization_name + (c.city ? ' · ' + c.city : '') + (c.phone ? ' · ' + c.phone : ''), 'var(--green)');
+            document.getElementById('scrape-stats').textContent = scrapeContacts.length + ' found';
+          } else if (msg.type === 'pushed') {
+            log('  → Pushed to GHL: ' + msg.company, 'var(--teal)');
+          } else if (msg.type === 'error') {
+            log('❌ ' + msg.message, 'var(--red)');
+          } else if (msg.type === 'done') {
+            log('\n✅ Complete — Found: ' + msg.found + ' · Pushed to GHL: ' + msg.pushed + ' · Skipped: ' + msg.skipped, 'var(--teal)');
+            renderScrapeResults();
+            // Refresh main pipeline data
+            load();
+          }
+        } catch {}
+      }
+    }
+  } catch(e) {
+    log('❌ Error: ' + e.message, 'var(--red)');
+  }
+
+  btn.textContent = 'Scrape →';
+  btn.disabled = false;
+  btn.style.background = 'var(--teal)';
+  btn.style.color = '#000';
+}
+
+function renderScrapeResults() {
+  if (!scrapeContacts.length) return;
+  document.getElementById('scrape-results').style.display = 'block';
+  document.getElementById('scrape-result-count').textContent = scrapeContacts.length + ' contacts';
+  document.getElementById('scrape-result-table').innerHTML = 
+    '<table><thead><tr><th>Company</th><th>Phone</th><th>Email</th><th>Location</th></tr></thead><tbody>' +
+    scrapeContacts.map(c => '<tr>' +
+      '<td><div class="td-name">' + c.organization_name + '</div>' + (c.name && c.name !== c.organization_name ? '<div class="td-sub">' + c.name + '</div>' : '') + '</td>' +
+      '<td style="font-size:11px;color:var(--muted)">' + (c.phone || '—') + '</td>' +
+      '<td style="font-size:11px;color:var(--muted)">' + (c.email || '—') + '</td>' +
+      '<td style="font-size:11px;color:var(--hint)">' + [c.city, c.state].filter(Boolean).join(', ') + '</td>' +
+    '</tr>').join('') +
+    '</tbody></table>';
+}
 
 // ── LIVE ACTIVITY / SSE ──────────────────────────────────────────────
 let allEvents = [];
