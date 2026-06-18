@@ -6,31 +6,40 @@ const port = process.env.PORT || 3000;
 app.use(express.json());
 
 // GHL helper
-async function callGHL(endpoint) {
+async function callGHL(endpoint, method='GET', body=null) {
   const fetch = (await import('node-fetch')).default;
-  const res = await fetch('https://services.leadconnectorhq.com' + endpoint, {
+  const opts = {
+    method,
     headers: {
       'Authorization': 'Bearer ' + process.env.GHL_API_KEY,
       'Content-Type': 'application/json',
       'Version': '2021-07-28'
     }
-  });
-  if (!res.ok) throw new Error('GHL ' + res.status);
+  };
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch('https://services.leadconnectorhq.com' + endpoint, opts);
+  if (!res.ok) throw new Error('GHL ' + res.status + ' ' + endpoint);
   return res.json();
 }
+const ghl = callGHL; // alias used by upload/scrape endpoints
 
 // Instantly helper
-async function callInstantly(endpoint) {
+async function callInstantly(endpoint, method='GET', body=null) {
   const fetch = (await import('node-fetch')).default;
-  const res = await fetch('https://api.instantly.ai/api/v2' + endpoint, {
+  const base = endpoint.startsWith('/api/v1') ? 'https://api.instantly.ai' : 'https://api.instantly.ai/api/v2';
+  const opts = {
+    method,
     headers: {
       'Authorization': 'Bearer ' + process.env.INSTANTLY_API_KEY,
       'Content-Type': 'application/json'
     }
-  });
-  if (!res.ok) throw new Error('Instantly ' + res.status);
+  };
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch(base + endpoint, opts);
+  if (!res.ok) throw new Error('Instantly ' + res.status + ' ' + endpoint);
   return res.json();
 }
+const instantly = callInstantly; // alias
 
 // Stripe helper
 async function callStripe(endpoint) {
