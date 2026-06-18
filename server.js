@@ -419,10 +419,44 @@ app.post('/api/extract-contacts', async (req, res) => {
           body: JSON.stringify({
             model: 'claude-sonnet-4-6',
             max_tokens: 2000,
-            system: 'Extract General Contractor business contacts from web page text. Return a JSON array only. No markdown, no explanation.',
+            system: `You are a lead extraction agent for SubDraw — a subcontractor invoice management SaaS for General Contractors.
+
+Your job: extract ONLY General Contractors (GCs) who likely manage subcontractors and would benefit from draw management software.
+
+TARGET: General contractors, custom home builders, commercial builders, construction companies that manage multiple subcontractors on jobs.
+
+SKIP: Specialty trades (electricians, plumbers, roofers, HVAC, painters, landscapers) UNLESS they also do general contracting. Skip suppliers, architects, engineers, real estate agents.
+
+WHY they need SubDraw: GCs who manage 3+ subs on a job have invoice approval problems — subs overbill, bill for incomplete work, bill twice. SubDraw catches that automatically.
+
+Return ONLY a JSON array. No markdown. No explanation.`,
             messages: [{
               role: 'user',
-              content: 'Extract all GC/contractor company contacts from this page. Return JSON array: [{ organization_name, name, first_name, last_name, email, phone, website, city, state, license_number }]. Return [] if none found.\n\nURL: ' + url + '\n\n' + chunk
+              content: `Extract General Contractor companies from this page that manage subcontractors.
+
+For each GC return:
+{
+  "organization_name": "company name",
+  "name": "owner/contact full name if found",
+  "first_name": "first name",
+  "last_name": "last name",
+  "email": "email or null",
+  "phone": "phone number or null",
+  "website": "website URL or null",
+  "city": "city or null",
+  "state": "2-letter state code or null",
+  "license_number": "contractor license # or null",
+  "rating": "star rating if shown or null",
+  "reviews": "number of reviews if shown or null",
+  "why_a_fit": "one sentence on why they need SubDraw based on what you see"
+}
+
+Source URL: ${url}
+
+Page content:
+${chunk}
+
+Return [] if no GC companies found. Never include specialty-only trades.`
             }]
           })
         });
