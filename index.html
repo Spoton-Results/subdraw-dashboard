@@ -864,18 +864,7 @@ function connectSSE() {
 }
 
 // Clear new event badge when user visits activity tab
-const _origNav = nav;
-function nav(id, btn) {
-  _origNav(id, btn);
-  if (id === 'activity') {
-    newEventCount = 0;
-    const sbBtn = document.getElementById('sb-activity');
-    if (sbBtn) {
-      const label = sbBtn.querySelector('.sb-label');
-      if (label) label.textContent = 'Live Activity';
-    }
-  }
-}
+// nav handles activity badge clearing inline
 
 // Start SSE connection
 connectSSE();
