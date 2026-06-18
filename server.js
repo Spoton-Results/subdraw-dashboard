@@ -15,7 +15,7 @@ async function ghl(endpoint) {
 }
 async function instantly(endpoint) {
   const fetch = (await import('node-fetch')).default;
-  const r = await fetch('https://api.instantly.ai/api/v2' + endpoint, {
+  const r = await fetch('https://api.instantly.ai/api/v1' + endpoint, {
     headers: { 'Authorization': 'Bearer ' + process.env.INSTANTLY_API_KEY, 'Content-Type': 'application/json' }
   });
   if (!r.ok) throw new Error('Instantly ' + r.status);
@@ -44,7 +44,7 @@ app.get('/api/data', async (req, res) => {
   try {
     const locId = process.env.GHL_LOCATION_ID || 'oe1TpmlDynQGFNdYLkaK';
     const pipId = process.env.GHL_PIPELINE_ID || 'lu4BTmjYjJC2hZVKxj1t';
-    const opps = await ghl('/opportunities/search?pipeline_id=' + pipId + '&locationId=' + locId + '&limit=100');
+    const opps = await ghl('/opportunities/search?pipeline_id=' + pipId + '&location_id=' + locId + '&limit=100');
     const sm = {
       [process.env.GHL_STAGE_COLD||'751975e9-c7f2-46a4-b821-e053bf505d8a']:'cold',
       [process.env.GHL_STAGE_EMAILED||'a9cb193d-c634-41e2-b7eb-e0c6a24065ca']:'emailed',
@@ -72,16 +72,15 @@ app.get('/api/data', async (req, res) => {
 
   try {
     const cid = process.env.INSTANTLY_CAMPAIGN_ID||'bb1d4655-8d06-4218-89d4-ec196bc8ca81';
-    const a = await instantly('/analytics/campaigns?id=' + cid);
-    const cd = a[0] || a;
+    const a = await instantly('/analytics/campaign?campaign_id=' + cid);
     out.campaign = {
-      sent: cd.total_emails_sent||cd.emails_sent_count||0,
-      opens: cd.total_opened||cd.unique_opens_count||0,
-      replies: cd.total_replied||cd.reply_count||0,
-      open_rate: Math.round((cd.open_rate||0)*100)/100,
-      reply_rate: Math.round((cd.reply_rate||0)*100)/100,
-      status: cd.status||'warming',
-      warmup: cd.warmup_score||cd.health_score||null
+      sent: a.total_emails_sent||0,
+      opens: a.total_opened||0,
+      replies: a.total_replied||0,
+      open_rate: Math.round((a.open_rate||0)*100)/100,
+      reply_rate: Math.round((a.reply_rate||0)*100)/100,
+      status: a.status||'warming',
+      warmup: a.warmup_score||null
     };
     out.health.instantly = true;
   } catch(e) { console.error('Instantly:', e.message); }
