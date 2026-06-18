@@ -215,31 +215,88 @@ function pushEvent(source, type, data) {
   console.log('[Webhook]', source, type, JSON.stringify(data).substring(0, 100));
 }
 
+// Critical alert keywords — immediate banner notification on dashboard
+const CRITICAL_KEYWORDS = ['stop', 'unsubscribe', 'remove me', 'dont contact', "don't contact", 'opt out', 'optout', 'cancel', 'not interested'];
+const POSITIVE_KEYWORDS = ['interested', 'yes', 'tell me more', 'sounds good', 'let me see', 'demo', 'how much', 'pricing', 'sign up', 'trial'];
+
+function detectAlertLevel(messageBody) {
+  const lower = (messageBody || '').toLowerCase();
+  if (CRITICAL_KEYWORDS.some(k => lower.includes(k))) return 'critical';
+  if (POSITIVE_KEYWORDS.some(k => lower.includes(k))) return 'hot';
+  return 'normal';
+}
+
 // GHL Webhook — fires on contact updates, SMS, pipeline changes, opportunities
 app.post('/webhook/ghl', (req, res) => {
   res.sendStatus(200); // Acknowledge immediately
   const body = req.body || {};
   const type = body.type || body.event || 'unknown';
+  const msgBody = body.body || body.message || '';
+  const contactName = body.contact?.name || body.contactName || 'Unknown';
   
   // Parse meaningful events
   if (type.includes('ContactCreate') || type.includes('contact.create')) {
     pushEvent('ghl', 'new_lead', { name: body.contact?.name || body.firstName, company: body.contact?.companyName });
-  } else if (type.includes('SMS') || type.includes('sms')) {
-    pushEvent('ghl', 'sms', { direction: body.direction, contact: body.contact?.name, body: (body.body || '').substring(0, 80) });
-  } else if (type.includes('OpportunityStage') || type.includes('opportunity.stageUpdate')) {
-    pushEvent('ghl', 'stage_change', { contact: body.contact?.name, stage: body.pipelineStage?.name || body.stage });
-  } else if (type.includes('NoteCreate') || type.includes('TaskCreate')) {
-    pushEvent('ghl', 'activity', { type, contact: body.contact?.name });
-  } else if (type.includes('OutboundMessage') || type.includes('InboundMessage')) {
-    pushEvent('ghl', type.includes('Inbound') ? 'reply' : 'outbound', { 
-      channel: body.messageType || body.type,
-      contact: body.contact?.name,
-      body: (body.body || body.message || '').substring(0, 80)
+
+  } else if (type.includes('SMS') || type.includes('sms') || body.messageType === 'TYPE_SMS') {
+    const direction = body.direction || (type.includes('Inbound') ? 'inbound' : 'outbound');
+    const alertLevel = direction === 'inbound' ? detectAlertLevel(msgBody) : 'normal';
+    
+    pushEvent('ghl', direction === 'inbound' ? 'sms_reply' : 'sms_sent', {
+      contact: contactName,
+      body: msgBody.substring(0, 120),
+      direction,
+      alert: alertLevel
     });
+
+    // Critical: STOP reply — fire immediate alert
+    if (alertLevel === 'critical') {
+      pushEvent('ghl', 'CRITICAL_STOP', {
+        contact: contactName,
+        message: msgBody,
+        action_required: 'Mark as do-not-contact immediately',
+        phone: body.phone || body.from
+      });
+      broadcastAlert({ level: 'critical', title: '🚨 STOP Reply — ' + contactName, body: msgBody, contact: contactName });
+    }
+
+    // Hot lead reply
+    if (alertLevel === 'hot') {
+      pushEvent('ghl', 'HOT_REPLY', {
+        contact: contactName,
+        message: msgBody,
+        action_required: 'Respond immediately'
+      });
+      broadcastAlert({ level: 'hot', title: '🔥 Hot Reply — ' + contactName, body: msgBody, contact: contactName });
+    }
+
+  } else if (type.includes('InboundMessage') || body.direction === 'inbound') {
+    const alertLevel = detectAlertLevel(msgBody);
+    pushEvent('ghl', 'reply', {
+      channel: body.messageType || 'unknown',
+      contact: contactName,
+      body: msgBody.substring(0, 120),
+      alert: alertLevel
+    });
+    if (alertLevel === 'critical') broadcastAlert({ level: 'critical', title: '🚨 Opt-out — ' + contactName, body: msgBody });
+    if (alertLevel === 'hot') broadcastAlert({ level: 'hot', title: '🔥 Interested — ' + contactName, body: msgBody });
+
+  } else if (type.includes('OpportunityStage') || type.includes('opportunity.stageUpdate')) {
+    pushEvent('ghl', 'stage_change', { contact: contactName, stage: body.pipelineStage?.name || body.stage });
+  } else if (type.includes('OutboundMessage')) {
+    pushEvent('ghl', 'outbound', { channel: body.messageType, contact: contactName, body: msgBody.substring(0, 80) });
   } else {
-    pushEvent('ghl', type, { raw: JSON.stringify(body).substring(0, 100) });
+    pushEvent('ghl', type, { contact: contactName, raw: JSON.stringify(body).substring(0, 100) });
   }
 });
+
+// Broadcast urgent alerts to all connected SSE clients
+function broadcastAlert(alert) {
+  const payload = JSON.stringify({ type: 'alert', alert, ts: new Date().toISOString() });
+  global.sseClients?.forEach(client => {
+    try { client.write('data: ' + payload + '\n\n'); } catch(e) {}
+  });
+}
 
 // Instantly Webhook — fires on email opens, replies, bounces, campaign events
 app.post('/webhook/instantly', (req, res) => {

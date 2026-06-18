@@ -215,6 +215,30 @@ tr:hover td{background:rgba(255,255,255,.015)}
   .pipe-stages{grid-template-columns:repeat(3,1fr)}
   .stg:nth-child(4),.stg:nth-child(5){display:none}
 }
+
+/* ── ALERT BANNER ── */
+#alert-banner {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 9999;
+  display: none;
+  flex-direction: column;
+  gap: 0;
+}
+.alert-item {
+  padding: 12px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  font-weight: 600;
+  animation: slideDown .3s ease;
+}
+.alert-item.critical { background: #ff3b3b; color: #fff; }
+.alert-item.hot      { background: #ff8c00; color: #fff; }
+.alert-item .alert-body { font-size: 11px; font-weight: 400; opacity: .85; margin-top: 2px; }
+.alert-item button { background: rgba(255,255,255,.2); border: none; color: #fff; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 11px; margin-left: 12px; flex-shrink: 0; }
+@keyframes slideDown { from { transform: translateY(-100%); opacity:0; } to { transform: translateY(0); opacity:1; } }
 </style>
 </head>
 <body>
@@ -749,6 +773,48 @@ setInterval(()=>{
 },1000);
 
 
+
+// ── ALERT SYSTEM ──────────────────────────────────────────────────
+const activeAlerts = [];
+
+function showAlert(alert) {
+  const banner = document.getElementById('alert-banner');
+  if (!banner) return;
+
+  const id = 'alert-' + Date.now();
+  const div = document.createElement('div');
+  div.className = 'alert-item ' + (alert.level || 'critical');
+  div.id = id;
+  div.innerHTML = 
+    '<div>' +
+      '<div>' + (alert.title || 'Alert') + '</div>' +
+      (alert.body ? '<div class="alert-body">' + alert.body.substring(0,100) + '</div>' : '') +
+    '</div>' +
+    '<button onclick="dismissAlert(\'' + id + '\')">Dismiss ✕</button>';
+
+  banner.appendChild(div);
+  banner.style.display = 'flex';
+
+  // Play sound for critical
+  if (alert.level === 'critical') {
+    try { new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAA...').play(); } catch(e) {}
+  }
+
+  // Auto-dismiss after 30s for hot, never for critical
+  if (alert.level !== 'critical') {
+    setTimeout(() => dismissAlert(id), 30000);
+  }
+
+  activeAlerts.push(id);
+}
+
+function dismissAlert(id) {
+  const el = document.getElementById(id);
+  if (el) el.remove();
+  const banner = document.getElementById('alert-banner');
+  if (banner && !banner.children.length) banner.style.display = 'none';
+}
+
 // ── CSV UPLOAD ──────────────────────────────────────────────────────
 let csvFile = null;
 let parsedRows = [];
@@ -969,6 +1035,8 @@ function connectSSE() {
     if (msg.type === 'init') {
       allEvents = [...msg.events, ...allEvents];
       renderActivityFeed();
+    } else if (msg.type === 'alert') {
+      showAlert(msg.alert);
     } else if (msg.type === 'event') {
       allEvents.unshift(msg.event);
       renderActivityFeed();
@@ -979,10 +1047,13 @@ function connectSSE() {
         const label = btn.querySelector('.sb-label');
         if (label) label.textContent = 'Live Activity (' + newEventCount + ')';
       }
-      // Auto-refresh dashboard data too
-      if (['sms','reply','new_lead','stage_change'].includes(msg.event.type)) {
-        load(); // Reload main data
+      // Auto-refresh on key events
+      if (['sms_reply','reply','new_lead','stage_change','HOT_REPLY','CRITICAL_STOP'].includes(msg.event.type)) {
+        load();
       }
+      // Also show alert for critical/hot events from activity feed
+      if (msg.event.data?.alert === 'critical') showAlert({ level:'critical', title:'🚨 ' + (msg.event.data.contact||'Contact') + ' replied STOP', body: msg.event.data.body||'' });
+      if (msg.event.data?.alert === 'hot') showAlert({ level:'hot', title:'🔥 Hot reply — ' + (msg.event.data.contact||'Contact'), body: msg.event.data.body||'' });
     }
   };
   
