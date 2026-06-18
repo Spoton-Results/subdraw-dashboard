@@ -584,6 +584,110 @@ Return [] if no GC companies found. Never include specialty-only trades.`
   }
 });
 
+
+// ── SMS REPLY POLLER ───────────────────────────────────────────────────────
+// Polls GHL conversations every 2 minutes for inbound SMS replies
+// Fires instant alerts on STOP or hot replies
+// Runs server-side so dashboard always knows — even when no browser is open
+
+const CRITICAL_WORDS = ['stop', 'unsubscribe', 'remove', 'dont contact', "don't contact", 'opt out'];
+const HOT_WORDS = ['interested', 'yes', 'tell me more', 'sounds good', 'demo', 'pricing', 'how much', 'sign up', 'trial', 'let me see'];
+
+let lastSMSCheck = Date.now() - (2 * 60 * 1000); // Start by checking last 2 min
+const alertedMessages = new Set(); // Don't alert same message twice
+
+async function pollSMSReplies() {
+  try {
+    const locId = process.env.GHL_LOCATION_ID || 'oe1TpmlDynQGFNdYLkaK';
+    
+    // Get recent conversations
+    const data = await callGHL('/conversations/?locationId=' + locId + '&limit=20&sort=desc&sortBy=last_message_date');
+    const convos = data.conversations || [];
+
+    for (const convo of convos) {
+      // Only check conversations updated since last poll
+      const updatedAt = new Date(convo.lastMessageDate || convo.dateUpdated).getTime();
+      if (updatedAt < lastSMSCheck) continue;
+
+      // Get messages for this conversation
+      const msgData = await callGHL('/conversations/' + convo.id + '/messages?limit=5');
+      const messages = msgData.messages || [];
+
+      for (const msg of messages) {
+        if (alertedMessages.has(msg.id)) continue;
+        if (msg.direction !== 'inbound') continue;
+        
+        const msgTime = new Date(msg.dateAdded || msg.createdAt).getTime();
+        if (msgTime < lastSMSCheck) continue;
+
+        const body = (msg.body || msg.text || '').toLowerCase().trim();
+        if (!body) continue;
+
+        alertedMessages.add(msg.id);
+
+        const contactName = convo.contactName || convo.fullName || 'Unknown';
+        const isCritical = CRITICAL_WORDS.some(w => body.includes(w));
+        const isHot = HOT_WORDS.some(w => body.includes(w));
+
+        if (isCritical) {
+          console.log('[SMS Poller] 🚨 STOP reply from:', contactName, '—', body);
+          pushEvent('ghl', 'CRITICAL_STOP', {
+            contact: contactName,
+            message: msg.body || msg.text,
+            action_required: 'Mark as do-not-contact',
+            contact_id: convo.contactId
+          });
+          broadcastAlert({
+            level: 'critical',
+            title: '🚨 STOP — ' + contactName,
+            body: msg.body || msg.text,
+            contact_id: convo.contactId
+          });
+          // Auto-tag contact as do-not-contact
+          if (convo.contactId) {
+            callGHL('/contacts/' + convo.contactId + '/tags', 'POST', {
+              tags: ['sms-unsubscribed', 'do-not-contact']
+            }).catch(() => {});
+          }
+        } else if (isHot) {
+          console.log('[SMS Poller] 🔥 Hot reply from:', contactName, '—', body);
+          pushEvent('ghl', 'HOT_REPLY', {
+            contact: contactName,
+            message: msg.body || msg.text,
+            action_required: 'Respond immediately'
+          });
+          broadcastAlert({
+            level: 'hot',
+            title: '🔥 Hot Reply — ' + contactName,
+            body: msg.body || msg.text
+          });
+        } else {
+          // Normal inbound — just log to activity feed
+          pushEvent('ghl', 'sms_reply', {
+            contact: contactName,
+            body: (msg.body || msg.text || '').substring(0, 100),
+            direction: 'inbound'
+          });
+        }
+      }
+    }
+
+    lastSMSCheck = Date.now();
+  } catch(e) {
+    console.log('[SMS Poller] Error:', e.message);
+  }
+}
+
+// Run immediately on startup then every 2 minutes
+pollSMSReplies();
+setInterval(pollSMSReplies, 2 * 60 * 1000);
+
+// Manual trigger endpoint
+app.get('/api/poll-sms', async (req, res) => {
+  await pollSMSReplies();
+  res.json({ checked: true, alerts: [...alertedMessages].slice(-5) });
+});
+
 // ── CSV UPLOAD ──────────────────────────────────────────────────────────────
 const multer = require('multer');
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
