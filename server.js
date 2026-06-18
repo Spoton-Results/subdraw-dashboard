@@ -839,27 +839,25 @@ app.post('/api/upload-csv', upload.single('file'), async (req, res) => {
 
         // Push to Instantly if has email
         if (p.email) {
-          await instantly('/api/v1/lead/add', 'POST', {
+          await instantly('/leads', 'POST', {
             campaign_id: campaignId,
             skip_if_in_workspace: true,
-            leads: [{
-              email: p.email,
-              first_name: p.first_name,
-              last_name: p.last_name,
-              company_name: p.company,
-              phone: p.phone,
-              website: p.website,
-              city: p.city,
-              state: p.state,
-              personalization: '',
-              custom_variables: {
-                company: p.company,
-                city: p.city || 'California',
-                current_tool: 'spreadsheets',
-                pain_point: 'invoice protection',
-                demo_url: 'https://subdraw.com/login'
-              }
-            }]
+            email: p.email,
+            first_name: p.first_name,
+            last_name: p.last_name,
+            company_name: p.company,
+            phone: p.phone || '',
+            website: p.website || '',
+            city: p.city || '',
+            state: p.state || 'CA',
+            personalization: '',
+            variables: {
+              company: p.company,
+              city: p.city || 'California',
+              current_tool: 'spreadsheets',
+              pain_point: 'invoice protection',
+              demo_url: 'https://subdraw.com/login'
+            }
           }).then(() => results.pushed_instantly++)
             .catch(e => results.errors.push(p.email + ': ' + e.message));
         }
