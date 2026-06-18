@@ -264,10 +264,10 @@ tr:hover td{background:rgba(255,255,255,.015)}
       <div class="launch" id="launch-banner">
         <div class="launch-info">
           <div class="launch-title" id="launch-title">🚀 California GCs — Campaign Live</div>
-          <div class="launch-sub" id="launch-sub">Sending 8am–5pm Pacific · 8 leads loaded · 4-email invoice protection sequence · hello@ + team@trysubdraw.com</div>
+          <div class="launch-sub" id="launch-sub">CA campaign live · 8 leads · UT campaign live · 21 leads · SMS sent to all 29 · reply handler every 30 min</div>
         </div>
         <div class="launch-count">
-          <div class="launch-num" id="cdown" style="font-size:18px">LIVE</div>
+          <div class="launch-num" id="cdown" style="font-size:18px;color:var(--teal)">LIVE</div>
           <div class="launch-unit" id="launch-unit">emails fire 8am PT</div>
         </div>
       </div>
@@ -609,6 +609,10 @@ async function load(){
     // COO
     document.getElementById('cm-mrr').textContent=fmm(D.revenue.mrr);
     const tot=Object.values(D.pipeline).reduce((a,b)=>a+b,0);
+    // Count SMS sent
+    const smsSent=(D.leads||[]).filter(l=>l.sms).length;
+    const smsEl=document.getElementById('sms-count');
+    if(smsEl) smsEl.textContent=smsSent+' SMS sent';
     document.getElementById('cm-pipe').textContent=fm(tot);
     document.getElementById('cm-sent').textContent=fm(D.campaign.sent);
     document.getElementById('cm-open').textContent=pct(D.campaign.open_rate)+' open rate';

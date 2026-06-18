@@ -91,8 +91,16 @@ app.get(['/api/dashboard', '/api/data'], async (req, res) => {
       if (tags.includes('demo-clicked')) data.pipeline.demo++;
     });
 
-    // Get leads list — search by ca-gc tag using contacts search
-    const contacts = await callGHL('/contacts/?locationId=' + locationId + '&query=ca-gc&limit=50');
+    // Get ALL leads — pull ca-gc and ut-gc and any sms-sent contacts
+    const [caContacts, utContacts] = await Promise.all([
+      callGHL('/contacts/?locationId=' + locationId + '&query=ca-gc&limit=100').catch(() => ({ contacts: [] })),
+      callGHL('/contacts/?locationId=' + locationId + '&query=ut-gc&limit=100').catch(() => ({ contacts: [] }))
+    ]);
+    // Merge and deduplicate by id
+    const allContacts = [...(caContacts.contacts || []), ...(utContacts.contacts || [])];
+    const seen = new Set();
+    const uniqueContacts = allContacts.filter(c => { if (seen.has(c.id)) return false; seen.add(c.id); return true; });
+    const contacts = { contacts: uniqueContacts };
     data.leads = (contacts.contacts || []).map(c => ({
       id: c.id,
       name: c.firstName + ' ' + c.lastName,
@@ -104,7 +112,7 @@ app.get(['/api/dashboard', '/api/data'], async (req, res) => {
       plan: c.customFields?.find(f => f.key === 'recommended_plan')?.field_value || '—',
       pain: c.customFields?.find(f => f.key === 'pain_point')?.field_value || '—',
       followup: c.customFields?.find(f => f.key === 'follow_up_date')?.field_value || null,
-      sms: c.tags?.includes('sms-sent') || false,
+      sms: c.tags?.includes('sms-sent') || c.tags?.includes('sms-day1') || false,
       added: c.dateAdded
     }));
 
@@ -160,7 +168,7 @@ app.get(['/api/dashboard', '/api/data'], async (req, res) => {
   if (!data.health.instantly) data.coo.push({ priority:'critical', icon:'DOWN', action:'Instantly API down — outreach stopped', detail:'No reply classification, no campaign data. Check API key and Instantly status page.', category:'infra' });
   if (hotLeads > 0) data.coo.push({ priority:'high', icon:'TARGET', action: hotLeads + ' hot lead(s) — personal outreach today', detail:'These GCs engaged with your sequence. A direct email from your personal address today converts at 10x the automated rate.', category:'pipeline' });
   if (scheduledFollowups > 0) data.coo.push({ priority:'high', icon:'SCHED', action: scheduledFollowups + ' follow-ups scheduled by Agent 32', detail:'GCs who said not now have auto-scheduled re-engagement dates. Review in GHL to confirm dates are accurate.', category:'pipeline' });
-  if (daysToLaunch <= 7 && daysToLaunch > 0) data.coo.push({ priority:'high', icon:'LAUNCH', action: daysToLaunch + ' days to July 7 launch — run final checklist', detail:'Confirm: warmup score above 80, all 8 CA GC contacts have correct variables, reply-handler running every 30 min.', category:'launch' });
+  // Campaign is live — no launch countdown needed
   if (data.revenue.mrr === 0) data.coo.push({ priority:'high', icon:'PARTNER', action:'Call one construction lender this week', detail:'One lender with 200 GC borrowers recommending SubDraw is worth $360K ARR. Agent 27 has their contacts ready.', category:'partner' });
   if (totalLeads < 20) data.coo.push({ priority:'medium', icon:'PIPELINE', action:'Pipeline thin — trigger prospect run manually', detail:'Only ' + totalLeads + ' leads. Monday prospector adds more. Consider running node scripts/prospector-cron.js manually.', category:'pipeline' });
   if (data.campaign.sent > 50 && data.campaign.reply_rate < 2) data.coo.push({ priority:'medium', icon:'COPY', action:'Reply rate below 2% — confirm canonical line is in email 1', detail:'"If SubDraw catches one invoice overrun this year, it paid for itself." Confirm this is in email 1 subject or opening line.', category:'outreach' });
