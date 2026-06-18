@@ -304,109 +304,79 @@ app.get('/api/events/recent', (req, res) => {
 
 
 // ── URL SCRAPER ────────────────────────────────────────────────────────────
-// Scrapes any URL for GC contacts and pushes to GHL
-app.post('/api/scrape-url', async (req, res) => {
-  const { url, maxPages = 5 } = req.body;
-  if (!url) return res.status(400).json({ error: 'URL required' });
+// Browser fetches the page, sends HTML here, Claude extracts contacts
+// Railway can't scrape external sites — browser does the fetch instead
 
-  // Validate URL
-  try { new URL(url); } catch { return res.status(400).json({ error: 'Invalid URL' }); }
-
-  console.log('[Scraper] Starting scrape:', url);
-
-  // Stream results back as SSE so user sees progress in real time
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-
-  const send = (data) => res.write('data: ' + JSON.stringify(data) + '\n\n');
+app.post('/api/extract-contacts', async (req, res) => {
+  const { html, url } = req.body;
+  if (!html) return res.status(400).json({ error: 'No HTML provided' });
 
   try {
-    send({ type: 'start', url, message: 'Fetching ' + url + '...' });
-
     const fetch2 = (await import('node-fetch')).default;
-    const pageRes = await fetch2(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36' },
-      redirect: 'follow',
-      timeout: 15000
-    });
 
-    if (!pageRes.ok) {
-      send({ type: 'error', message: 'Could not fetch URL: HTTP ' + pageRes.status });
-      return res.end();
-    }
-
-    const html = await pageRes.text();
+    // Strip HTML to text
     const text = html
       .replace(/<script[\s\S]*?<\/script>/gi, '')
       .replace(/<style[\s\S]*?<\/style>/gi, '')
       .replace(/<[^>]+>/g, ' ')
       .replace(/\s+/g, ' ')
-      .trim();
+      .trim()
+      .substring(0, 25000);
 
-    send({ type: 'progress', message: 'Page loaded (' + text.length + ' chars). Extracting contacts with AI...' });
+    if (text.length < 100) return res.json({ contacts: [], message: 'Page has no readable text' });
 
-    // Use Claude to extract contacts
+    // Send to Claude in chunks
+    const chunkSize = 6000;
     const chunks = [];
-    for (let i = 0; i < Math.min(text.length, 30000); i += 5500) {
-      chunks.push(text.substring(i, i + 6000));
-    }
+    for (let i = 0; i < text.length; i += chunkSize) chunks.push(text.substring(i, i + chunkSize));
 
     const allContacts = [];
     const seen = new Set();
 
-    for (let i = 0; i < chunks.length; i++) {
-      const chunk = chunks[i];
-      if (chunk.trim().length < 100) continue;
-
-      send({ type: 'progress', message: 'Analyzing chunk ' + (i+1) + ' of ' + chunks.length + '...' });
-
+    for (const chunk of chunks.slice(0, 5)) {
       try {
-        const claudeRes = await fetch2('https://api.anthropic.com/v1/messages', {
+        const r = await fetch2('https://api.anthropic.com/v1/messages', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': process.env.ANTHROPIC_API_KEY,
+            'anthropic-version': '2023-06-01'
+          },
           body: JSON.stringify({
             model: 'claude-sonnet-4-6',
             max_tokens: 2000,
-            system: 'Extract General Contractor business contacts from web page text. Return JSON array only. No markdown.',
-            messages: [{ role: 'user', content: 'Extract all GC company contacts from this page. For each return: { organization_name, name, first_name, last_name, title, email, phone, website, city, state, license_number, rating, reviews }. Return [] if none found.\n\nURL: ' + url + '\n\nContent:\n' + chunk }]
+            system: 'Extract General Contractor business contacts from web page text. Return a JSON array only. No markdown, no explanation.',
+            messages: [{
+              role: 'user',
+              content: 'Extract all GC/contractor company contacts from this page. Return JSON array: [{ organization_name, name, first_name, last_name, email, phone, website, city, state, license_number }]. Return [] if none found.\n\nURL: ' + url + '\n\n' + chunk
+            }]
           })
         });
-        const claudeData = await claudeRes.json();
-        const txt = claudeData.content?.[0]?.text || '[]';
-        const clean = txt.replace(/```json|```/g, '').trim();
-        const contacts = JSON.parse(clean);
-
+        const d = await r.json();
+        const txt = (d.content?.[0]?.text || '[]').replace(/```json|```/g,'').trim();
+        const contacts = JSON.parse(txt);
         if (Array.isArray(contacts)) {
-          for (const c of contacts) {
-            if (!c.organization_name) continue;
-            const key = c.organization_name.toLowerCase().replace(/[^a-z0-9]/g, '');
+          contacts.forEach(c => {
+            if (!c.organization_name) return;
+            const key = c.organization_name.toLowerCase().replace(/[^a-z0-9]/g,'');
             if (key.length > 2 && !seen.has(key)) {
               seen.add(key);
               allContacts.push({ ...c, source_url: url });
-              send({ type: 'contact', contact: c });
             }
-          }
+          });
         }
-      } catch(e) {
-        console.log('[Scraper] Claude error:', e.message);
-      }
+      } catch(e) { console.log('[Extract] Claude error:', e.message); }
     }
 
-    send({ type: 'progress', message: 'Found ' + allContacts.length + ' contacts. Pushing to GHL...' });
-
     // Push to GHL
-    let pushed = 0, skipped = 0;
     const locId = process.env.GHL_LOCATION_ID || 'oe1TpmlDynQGFNdYLkaK';
     const pipId = process.env.GHL_PIPELINE_ID || 'lu4BTmjYjJC2hZVKxj1t';
     const coldId = process.env.GHL_STAGE_COLD || '751975e9-c7f2-46a4-b821-e053bf505d8a';
+    let pushed = 0;
 
     for (const c of allContacts) {
       try {
         const st = (c.state || '').toUpperCase();
-        const tags = ['agent-outreach', 'gc-prospect', 'web-scrape', 'cold-outreach',
-          st === 'CA' ? 'ca-gc' : st === 'UT' ? 'ut-gc' : 'gc-prospect'];
-
         const contactRes = await ghl('/contacts/', 'POST', {
           locationId: locId,
           firstName: c.first_name || '',
@@ -418,37 +388,25 @@ app.post('/api/scrape-url', async (req, res) => {
           website: c.website || '',
           city: c.city || '',
           state: c.state || '',
-          source: 'URL Scrape: ' + url.substring(0, 50),
-          tags,
-          customFields: [
-            { key: 'license_number', field_value: c.license_number || '' },
-            { key: 'scrape_source', field_value: url }
-          ].filter(f => f.field_value)
+          source: 'URL Scrape',
+          tags: ['agent-outreach','gc-prospect','web-scrape','cold-outreach',
+            st==='CA'?'ca-gc':st==='UT'?'ut-gc':'gc-prospect']
         });
-
         if (contactRes.contact?.id) {
           await ghl('/opportunities/', 'POST', {
-            pipelineId: pipId,
-            pipelineStageId: coldId,
+            pipelineId: pipId, pipelineStageId: coldId,
             contactId: contactRes.contact.id,
-            name: c.organization_name + ' — SubDraw Outreach',
-            status: 'open'
-          }).catch(() => {});
+            name: c.organization_name + ' — SubDraw Outreach', status: 'open'
+          }).catch(()=>{});
           pushed++;
-          send({ type: 'pushed', company: c.organization_name });
         }
-      } catch(e) {
-        skipped++;
-      }
+      } catch(e) {}
       await new Promise(r => setTimeout(r, 150));
     }
 
-    send({ type: 'done', found: allContacts.length, pushed, skipped });
-    res.end();
-
+    res.json({ contacts: allContacts, pushed, found: allContacts.length });
   } catch(e) {
-    send({ type: 'error', message: e.message });
-    res.end();
+    res.status(500).json({ error: e.message });
   }
 });
 

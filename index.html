@@ -834,99 +834,110 @@ async function uploadCSV() {
 
 
 // ── URL SCRAPER ──────────────────────────────────────────────────────
+// Browser fetches the page (bypasses Railway network restrictions)
+// then sends HTML to server for Claude extraction
 let scrapeContacts = [];
 
+function logScrape(msg, color) {
+  const el = document.getElementById('scrape-log');
+  if (!el) return;
+  el.innerHTML += '<div style="color:' + (color||'var(--muted)') + ';margin-bottom:2px">' + msg + '</div>';
+  el.scrollTop = el.scrollHeight;
+}
+
 async function startScrape() {
-  const url = document.getElementById('scrape-url').value.trim();
-  if (!url) return;
+  const urlInput = document.getElementById('scrape-url');
+  const url = urlInput ? urlInput.value.trim() : '';
+  if (!url) { alert('Please enter a URL'); return; }
 
   const btn = document.getElementById('scrape-btn');
-  btn.textContent = 'Scraping...';
-  btn.disabled = true;
-  btn.style.background = 'var(--s3)';
-  btn.style.color = 'var(--muted)';
+  if (btn) { btn.textContent = 'Working...'; btn.disabled = true; btn.style.opacity = '0.6'; }
 
   scrapeContacts = [];
-  document.getElementById('scrape-status').style.display = 'block';
-  document.getElementById('scrape-results').style.display = 'none';
-  document.getElementById('scrape-log').innerHTML = '';
-  document.getElementById('scrape-stats').textContent = '';
+  const statusEl = document.getElementById('scrape-status');
+  const resultsEl = document.getElementById('scrape-results');
+  const logEl = document.getElementById('scrape-log');
+  const statsEl = document.getElementById('scrape-stats');
 
-  const log = (msg, color) => {
-    const el = document.getElementById('scrape-log');
-    el.innerHTML += '<div style="color:' + (color||'var(--muted)') + '">' + msg + '</div>';
-    el.scrollTop = el.scrollHeight;
-  };
+  if (statusEl) statusEl.style.display = 'block';
+  if (resultsEl) resultsEl.style.display = 'none';
+  if (logEl) logEl.innerHTML = '';
+  if (statsEl) statsEl.textContent = '';
 
   try {
-    const res = await fetch('/api/scrape-url', {
+    logScrape('📡 Fetching page via CORS proxy...', 'var(--text)');
+
+    // Use allorigins CORS proxy — free, no key needed
+    const proxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url);
+    let html = '';
+
+    try {
+      const r = await fetch(proxyUrl);
+      if (!r.ok) throw new Error('Proxy returned ' + r.status);
+      html = await r.text();
+      logScrape('✓ Page loaded (' + Math.round(html.length/1000) + 'KB)', 'var(--green)');
+    } catch(e) {
+      // Fallback proxy
+      logScrape('⚠ Primary proxy failed, trying fallback...', 'var(--amber)');
+      const r2 = await fetch('https://corsproxy.io/?' + encodeURIComponent(url));
+      if (!r2.ok) throw new Error('Both proxies failed — try a different URL');
+      html = await r2.text();
+      logScrape('✓ Page loaded via fallback (' + Math.round(html.length/1000) + 'KB)', 'var(--green)');
+    }
+
+    logScrape('🤖 AI extracting contacts...', 'var(--muted)');
+
+    // Send to server for Claude extraction
+    const r = await fetch('/api/extract-contacts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url })
+      body: JSON.stringify({ html, url })
     });
 
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
+    const data = await r.json();
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
+    if (data.error) {
+      logScrape('❌ ' + data.error, 'var(--red)');
+    } else {
+      scrapeContacts = data.contacts || [];
+      logScrape('✓ Found ' + data.found + ' contacts', 'var(--green)');
+      logScrape('✓ Pushed ' + data.pushed + ' to GHL pipeline', 'var(--teal)');
+      if (statsEl) statsEl.textContent = data.found + ' found · ' + data.pushed + ' in GHL';
 
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop();
-
-      for (const line of lines) {
-        if (!line.startsWith('data: ')) continue;
-        try {
-          const msg = JSON.parse(line.substring(6));
-
-          if (msg.type === 'start') {
-            log('🔍 ' + msg.message, 'var(--text)');
-          } else if (msg.type === 'progress') {
-            log('⚙️ ' + msg.message);
-          } else if (msg.type === 'contact') {
-            const c = msg.contact;
-            scrapeContacts.push(c);
-            log('✓ Found: ' + c.organization_name + (c.city ? ' · ' + c.city : '') + (c.phone ? ' · ' + c.phone : ''), 'var(--green)');
-            document.getElementById('scrape-stats').textContent = scrapeContacts.length + ' found';
-          } else if (msg.type === 'pushed') {
-            log('  → Pushed to GHL: ' + msg.company, 'var(--teal)');
-          } else if (msg.type === 'error') {
-            log('❌ ' + msg.message, 'var(--red)');
-          } else if (msg.type === 'done') {
-            log('\n✅ Complete — Found: ' + msg.found + ' · Pushed to GHL: ' + msg.pushed + ' · Skipped: ' + msg.skipped, 'var(--teal)');
-            renderScrapeResults();
-            // Refresh main pipeline data
-            load();
-          }
-        } catch {}
+      if (scrapeContacts.length > 0) {
+        scrapeContacts.forEach(c => {
+          logScrape('  · ' + c.organization_name + (c.city ? ' — ' + c.city : '') + (c.phone ? ' — ' + c.phone : ''), 'var(--muted)');
+        });
+        renderScrapeResults();
+        load(); // Refresh pipeline
+      } else {
+        logScrape('⚠ No GC contacts found on this page. Try a directory or listing URL.', 'var(--amber)');
       }
     }
   } catch(e) {
-    log('❌ Error: ' + e.message, 'var(--red)');
+    logScrape('❌ ' + e.message, 'var(--red)');
   }
 
-  btn.textContent = 'Scrape →';
-  btn.disabled = false;
-  btn.style.background = 'var(--teal)';
-  btn.style.color = '#000';
+  if (btn) { btn.textContent = 'Scrape →'; btn.disabled = false; btn.style.opacity = '1'; }
 }
 
 function renderScrapeResults() {
   if (!scrapeContacts.length) return;
-  document.getElementById('scrape-results').style.display = 'block';
-  document.getElementById('scrape-result-count').textContent = scrapeContacts.length + ' contacts';
-  document.getElementById('scrape-result-table').innerHTML = 
+  const el = document.getElementById('scrape-results');
+  const ct = document.getElementById('scrape-result-count');
+  const tbl = document.getElementById('scrape-result-table');
+  if (!el || !tbl) return;
+  el.style.display = 'block';
+  if (ct) ct.textContent = scrapeContacts.length + ' contacts';
+  tbl.innerHTML =
     '<table><thead><tr><th>Company</th><th>Phone</th><th>Email</th><th>Location</th></tr></thead><tbody>' +
     scrapeContacts.map(c => '<tr>' +
-      '<td><div class="td-name">' + c.organization_name + '</div>' + (c.name && c.name !== c.organization_name ? '<div class="td-sub">' + c.name + '</div>' : '') + '</td>' +
-      '<td style="font-size:11px;color:var(--muted)">' + (c.phone || '—') + '</td>' +
-      '<td style="font-size:11px;color:var(--muted)">' + (c.email || '—') + '</td>' +
-      '<td style="font-size:11px;color:var(--hint)">' + [c.city, c.state].filter(Boolean).join(', ') + '</td>' +
-    '</tr>').join('') +
-    '</tbody></table>';
+      '<td><div class="td-name">' + (c.organization_name||'') + '</div>' +
+      (c.name && c.name !== c.organization_name ? '<div class="td-sub">' + c.name + '</div>' : '') + '</td>' +
+      '<td style="font-size:11px;color:var(--muted)">' + (c.phone||'—') + '</td>' +
+      '<td style="font-size:11px;color:var(--muted)">' + (c.email||'—') + '</td>' +
+      '<td style="font-size:11px;color:var(--hint)">' + [c.city,c.state].filter(Boolean).join(', ') + '</td>' +
+    '</tr>').join('') + '</tbody></table>';
 }
 
 // ── LIVE ACTIVITY / SSE ──────────────────────────────────────────────
