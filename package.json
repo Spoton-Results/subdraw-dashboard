@@ -1,0 +1,17 @@
+{
+  "name": "subdraw-dashboard",
+  "version": "1.0.0",
+  "description": "SubDraw Agent Command Center — live dashboard",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.0",
+    "dotenv": "^16.0.0",
+    "node-fetch": "^3.3.2",
+    "cors": "^2.8.5"
+  },
+  "engines": { "node": ">=18.0.0" }
+}

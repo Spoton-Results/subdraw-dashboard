@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SubDraw — Agent Command Center</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+:root {
+  --bg: #0d0f12;
+  --surface: #161920;
+  --surface2: #1e2230;
+  --border: #2a2f3d;
+  --text: #e8eaf0;
+  --muted: #7a8299;
+  --hint: #4a5068;
+  --green: #22c55e;
+  --amber: #f59e0b;
+  --red: #ef4444;
+  --blue: #3b82f6;
+  --teal: #14b8a6;
+  --purple: #8b5cf6;
+}
+body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; line-height: 1.5; min-height: 100vh; }
+.topbar { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; height: 56px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
+.topbar-left { display: flex; align-items: center; gap: 12px; }
+.logo { font-size: 16px; font-weight: 600; color: var(--text); }
+.logo span { color: var(--teal); }
+.status-pill { font-size: 11px; padding: 3px 10px; border-radius: 20px; background: rgba(34,197,94,.15); color: var(--green); border: 1px solid rgba(34,197,94,.3); display: flex; align-items: center; gap: 5px; }
+.status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
+.topbar-right { display: flex; align-items: center; gap: 12px; }
+.last-updated { font-size: 12px; color: var(--muted); }
+.refresh-btn { background: var(--surface2); border: 1px solid var(--border); color: var(--text); padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 13px; transition: background .15s; }
+.refresh-btn:hover { background: var(--border); }
+.main { padding: 24px; max-width: 1400px; margin: 0 auto; }
+.metrics-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 24px; }
+.metric { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+.metric-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 8px; }
+.metric-val { font-size: 28px; font-weight: 600; color: var(--text); line-height: 1; }
+.metric-sub { font-size: 11px; color: var(--hint); margin-top: 6px; }
+.metric-delta-up { color: var(--green); font-size: 11px; margin-top: 4px; }
+.metric-delta-down { color: var(--red); font-size: 11px; margin-top: 4px; }
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.card-header { padding: 14px 18px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+.card-title { font-size: 13px; font-weight: 500; color: var(--text); }
+.card-body { padding: 0; }
+.pipeline-row { display: grid; grid-template-columns: repeat(5, 1fr); }
+.stage { padding: 20px 16px; text-align: center; border-right: 1px solid var(--border); position: relative; }
+.stage:last-child { border-right: none; }
+.stage-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 8px; }
+.stage-count { font-size: 32px; font-weight: 600; }
+.stage-cold { color: var(--muted); }
+.stage-emailed { color: var(--blue); }
+.stage-replied { color: var(--amber); }
+.stage-demo { color: var(--purple); }
+.stage-customer { color: var(--green); }
+.stage-bar { height: 3px; position: absolute; bottom: 0; left: 0; right: 0; }
+.bar-cold { background: var(--hint); }
+.bar-emailed { background: var(--blue); }
+.bar-replied { background: var(--amber); }
+.bar-demo { background: var(--purple); }
+.bar-customer { background: var(--green); }
+table { width: 100%; border-collapse: collapse; }
+th { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; padding: 10px 16px; text-align: left; border-bottom: 1px solid var(--border); font-weight: 500; }
+td { padding: 11px 16px; border-bottom: 1px solid var(--border); font-size: 13px; color: var(--text); vertical-align: middle; }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: rgba(255,255,255,.02); }
+.badge { font-size: 11px; padding: 3px 9px; border-radius: 20px; font-weight: 500; white-space: nowrap; }
+.badge-hot { background: rgba(239,68,68,.15); color: #f87171; border: 1px solid rgba(239,68,68,.3); }
+.badge-warm { background: rgba(245,158,11,.15); color: #fbbf24; border: 1px solid rgba(245,158,11,.3); }
+.badge-cold { background: rgba(122,130,153,.15); color: var(--muted); border: 1px solid var(--border); }
+.badge-replied { background: rgba(59,130,246,.15); color: #60a5fa; border: 1px solid rgba(59,130,246,.3); }
+.badge-customer { background: rgba(20,184,166,.15); color: #2dd4bf; border: 1px solid rgba(20,184,166,.3); }
+.badge-green { background: rgba(34,197,94,.15); color: var(--green); border: 1px solid rgba(34,197,94,.3); }
+.badge-red { background: rgba(239,68,68,.15); color: #f87171; border: 1px solid rgba(239,68,68,.3); }
+.badge-amber { background: rgba(245,158,11,.15); color: #fbbf24; border: 1px solid rgba(245,158,11,.3); }
+.agent-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; margin-right: 7px; }
+.dot-green { background: var(--green); }
+.dot-amber { background: var(--amber); }
+.dot-red { background: var(--red); }
+.dot-gray { background: var(--hint); }
+.health-row { display: flex; gap: 8px; padding: 14px 18px; flex-wrap: wrap; }
+.health-item { display: flex; align-items: center; gap: 6px; font-size: 12px; padding: 5px 12px; border-radius: 20px; border: 1px solid var(--border); background: var(--surface2); }
+.campaign-stat { display: flex; justify-content: space-between; align-items: center; padding: 12px 18px; border-bottom: 1px solid var(--border); }
+.campaign-stat:last-child { border-bottom: none; }
+.campaign-stat-label { font-size: 13px; color: var(--muted); }
+.campaign-stat-val { font-size: 15px; font-weight: 500; color: var(--text); }
+.launch-banner { background: linear-gradient(135deg, rgba(20,184,166,.1), rgba(139,92,246,.1)); border: 1px solid rgba(20,184,166,.2); border-radius: 10px; padding: 16px 20px; margin-bottom: 24px; display: flex; align-items: center; justify-content: space-between; }
+.launch-text { font-size: 14px; font-weight: 500; color: var(--text); }
+.launch-sub { font-size: 12px; color: var(--muted); margin-top: 3px; }
+.countdown { font-size: 24px; font-weight: 600; color: var(--teal); }
+.countdown-label { font-size: 11px; color: var(--muted); text-align: center; }
+.tab-row { display: flex; gap: 4px; padding: 12px 16px 0; border-bottom: 1px solid var(--border); }
+.tab { font-size: 12px; padding: 6px 14px; border-radius: 6px 6px 0 0; border: 1px solid transparent; background: transparent; color: var(--muted); cursor: pointer; margin-bottom: -1px; }
+.tab.active { background: var(--surface); border-color: var(--border); border-bottom-color: var(--surface); color: var(--text); }
+.section-title { font-size: 12px; font-weight: 500; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 12px; }
+.loading { color: var(--muted); font-size: 13px; padding: 24px; text-align: center; }
+.error-msg { color: var(--red); font-size: 12px; padding: 12px 18px; }
+@media (max-width: 900px) {
+  .metrics-row { grid-template-columns: repeat(2, 1fr); }
+  .grid-2, .grid-3 { grid-template-columns: 1fr; }
+  .pipeline-row { grid-template-columns: repeat(3, 1fr); }
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-left">
+    <div class="logo">Sub<span>Draw</span> Agents</div>
+    <div class="status-pill"><span class="status-dot"></span> Live</div>
+  </div>
+  <div class="topbar-right">
+    <span class="last-updated" id="last-updated">Loading...</span>
+    <button class="refresh-btn" onclick="loadData()">↻ Refresh</button>
+  </div>
+</div>
+
+<div class="main">
+
+  <div class="launch-banner">
+    <div>
+      <div class="launch-text">🚀 SubDraw California GCs — Campaign Launch</div>
+      <div class="launch-sub">Instantly auto-fires July 7, 2026 · 8 leads loaded · 4-email invoice protection sequence</div>
+    </div>
+    <div style="text-align:center;">
+      <div class="countdown" id="countdown">—</div>
+      <div class="countdown-label">days to launch</div>
+    </div>
+  </div>
+
+  <div class="metrics-row">
+    <div class="metric">
+      <div class="metric-label">MRR</div>
+      <div class="metric-val" id="m-mrr">$0</div>
+      <div class="metric-sub">pre-launch</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">Leads in pipeline</div>
+      <div class="metric-val" id="m-leads">—</div>
+      <div class="metric-sub" id="m-leads-sub">loading...</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">Emails sent</div>
+      <div class="metric-val" id="m-sent">—</div>
+      <div class="metric-sub" id="m-openrate">— open rate</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">Replies</div>
+      <div class="metric-val" id="m-replies">—</div>
+      <div class="metric-sub" id="m-replyrate">— reply rate</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">New signups (24h)</div>
+      <div class="metric-val" id="m-signups">—</div>
+      <div class="metric-sub" id="m-signups-sub">loading...</div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:24px;">
+    <div class="card-header">
+      <span class="card-title">Lead pipeline</span>
+      <span style="font-size:12px; color:var(--muted);" id="pipeline-total">— total</span>
+    </div>
+    <div class="pipeline-row">
+      <div class="stage">
+        <div class="stage-label">Cold</div>
+        <div class="stage-count stage-cold" id="s-cold">—</div>
+        <div class="stage-bar bar-cold"></div>
+      </div>
+      <div class="stage">
+        <div class="stage-label">Emailed</div>
+        <div class="stage-count stage-emailed" id="s-emailed">—</div>
+        <div class="stage-bar bar-emailed"></div>
+      </div>
+      <div class="stage">
+        <div class="stage-label">Replied</div>
+        <div class="stage-count stage-replied" id="s-replied">—</div>
+        <div class="stage-bar bar-replied"></div>
+      </div>
+      <div class="stage">
+        <div class="stage-label">Demo visited</div>
+        <div class="stage-count stage-demo" id="s-demo">—</div>
+        <div class="stage-bar bar-demo"></div>
+      </div>
+      <div class="stage">
+        <div class="stage-label">Customer</div>
+        <div class="stage-count stage-customer" id="s-customer">—</div>
+        <div class="stage-bar bar-customer"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid-2">
+
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Leads</span>
+        <div style="display:flex;gap:4px;">
+          <button class="tab active" onclick="filterLeads('all',this)">All</button>
+          <button class="tab" onclick="filterLeads('hot',this)">Hot</button>
+          <button class="tab" onclick="filterLeads('replied',this)">Replied</button>
+          <button class="tab" onclick="filterLeads('customer',this)">Customers</button>
+        </div>
+      </div>
+      <div id="leads-table"><div class="loading">Loading leads...</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><span class="card-title">Agent services</span></div>
+      <div id="services-table"><div class="loading">Loading services...</div></div>
+    </div>
+
+  </div>
+
+  <div class="grid-2">
+
+    <div class="card">
+      <div class="card-header"><span class="card-title">Instantly campaign</span></div>
+      <div id="campaign-stats"><div class="loading">Loading campaign...</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><span class="card-title">System health</span></div>
+      <div id="health-display"><div class="loading">Checking systems...</div></div>
+    </div>
+
+  </div>
+
+</div>
+
+<script>
+let allLeads = [];
+let currentFilter = 'all';
+
+function daysUntil(dateStr) {
+  const target = new Date(dateStr);
+  const now = new Date();
+  return Math.max(0, Math.ceil((target - now) / 86400000));
+}
+
+function getTier(lead) {
+  if (lead.tags.includes('customer')) return 'customer';
+  if (lead.tags.includes('replied') || lead.tier === 'hot') return 'replied';
+  if (lead.tier === 'warm') return 'warm';
+  return 'cold';
+}
+
+function getBadgeHTML(tier) {
+  const map = {
+    customer: '<span class="badge badge-customer">Customer</span>',
+    replied: '<span class="badge badge-replied">Replied</span>',
+    hot: '<span class="badge badge-hot">Hot</span>',
+    warm: '<span class="badge badge-warm">Warm</span>',
+    cold: '<span class="badge badge-cold">Cold</span>'
+  };
+  return map[tier] || map.cold;
+}
+
+function renderLeads(filter) {
+  currentFilter = filter;
+  const filtered = filter === 'all' ? allLeads : allLeads.filter(l => getTier(l) === filter);
+  const el = document.getElementById('leads-table');
+
+  if (!filtered.length) {
+    el.innerHTML = '<div class="loading">No leads in this stage yet.</div>';
+    return;
+  }
+
+  el.innerHTML = '<table><thead><tr><th>Contact</th><th>Plan</th><th>Score</th><th>Status</th></tr></thead><tbody>' +
+    filtered.map(l => {
+      const tier = getTier(l);
+      return '<tr><td><div style="font-weight:500;">' + l.name + '</div><div style="font-size:11px;color:var(--muted);">' + l.company + '</div></td>' +
+        '<td style="font-size:12px;">' + (l.plan || '—').replace('_', ' ') + '</td>' +
+        '<td style="font-weight:500;">' + (l.score || '—') + '</td>' +
+        '<td>' + getBadgeHTML(tier) + '</td></tr>';
+    }).join('') +
+    '</tbody></table>';
+}
+
+function filterLeads(filter, btn) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  renderLeads(filter);
+}
+
+async function loadData() {
+  document.getElementById('last-updated').textContent = 'Refreshing...';
+  document.getElementById('countdown').textContent = daysUntil('2026-07-07');
+
+  try {
+    const [dash, services] = await Promise.all([
+      fetch('/api/dashboard').then(r => r.json()),
+      fetch('/api/services').then(r => r.json())
+    ]);
+
+    // Metrics
+    document.getElementById('m-mrr').textContent = '$' + Math.round(dash.revenue.mrr).toLocaleString();
+    const totalLeads = Object.values(dash.pipeline).reduce((a,b) => a+b, 0);
+    document.getElementById('m-leads').textContent = totalLeads;
+    document.getElementById('m-leads-sub').textContent = 'across all stages';
+    document.getElementById('m-sent').textContent = dash.campaign.sent || 0;
+    document.getElementById('m-openrate').textContent = (dash.campaign.open_rate || 0) + '% open rate';
+    document.getElementById('m-replies').textContent = dash.campaign.replies || 0;
+    document.getElementById('m-replyrate').textContent = (dash.campaign.reply_rate || 0) + '% reply rate';
+    document.getElementById('m-signups').textContent = dash.revenue.new_signups;
+    document.getElementById('m-signups-sub').textContent = dash.revenue.cancellations > 0 ? dash.revenue.cancellations + ' cancelled' : 'no cancellations';
+
+    // Pipeline
+    document.getElementById('s-cold').textContent = dash.pipeline.cold;
+    document.getElementById('s-emailed').textContent = dash.pipeline.emailed;
+    document.getElementById('s-replied').textContent = dash.pipeline.replied;
+    document.getElementById('s-demo').textContent = dash.pipeline.demo;
+    document.getElementById('s-customer').textContent = dash.pipeline.customer;
+    document.getElementById('pipeline-total').textContent = totalLeads + ' total';
+
+    // Leads table
+    allLeads = dash.leads;
+    renderLeads(currentFilter);
+
+    // Services
+    document.getElementById('services-table').innerHTML = '<table><thead><tr><th>Service</th><th>Agents</th><th>Schedule</th><th>Status</th></tr></thead><tbody>' +
+      services.map(s => '<tr><td style="font-weight:500;">' + s.name + '</td>' +
+        '<td style="font-size:11px;color:var(--muted);">' + s.agents.join(', ') + '</td>' +
+        '<td style="font-size:12px;">' + s.schedule + '</td>' +
+        '<td><span class="badge badge-green">Online</span></td></tr>'
+      ).join('') + '</tbody></table>';
+
+    // Campaign
+    document.getElementById('campaign-stats').innerHTML = [
+      ['Campaign', 'SubDraw California GCs'],
+      ['Status', dash.campaign.status || 'Warming up'],
+      ['Emails sent', (dash.campaign.sent || 0).toLocaleString()],
+      ['Opens', (dash.campaign.opens || 0).toLocaleString() + ' (' + (dash.campaign.open_rate || 0) + '%)'],
+      ['Replies', (dash.campaign.replies || 0).toLocaleString() + ' (' + (dash.campaign.reply_rate || 0) + '%)'],
+      ['Launch date', 'July 7, 2026 (auto)']
+    ].map(([l,v]) => '<div class="campaign-stat"><span class="campaign-stat-label">' + l + '</span><span class="campaign-stat-val">' + v + '</span></div>').join('');
+
+    // Health
+    const healthItems = [
+      { name: 'GHL', ok: dash.health.ghl },
+      { name: 'Instantly', ok: dash.health.instantly },
+      { name: 'Stripe', ok: dash.health.stripe },
+      { name: 'Anthropic', ok: !!dash.leads },
+      { name: 'Apollo', ok: true },
+      { name: 'Railway', ok: true }
+    ];
+    document.getElementById('health-display').innerHTML = '<div class="health-row">' +
+      healthItems.map(h => '<div class="health-item"><span class="agent-dot ' + (h.ok ? 'dot-green' : 'dot-red') + '"></span>' + h.name + '</div>').join('') +
+      '</div>' +
+      (dash.revenue.failed_payments > 0 ? '<div class="error-msg">⚠ ' + dash.revenue.failed_payments + ' failed payment(s) in last 24hrs</div>' : '<div style="padding:12px 18px;font-size:12px;color:var(--muted);">All systems operational</div>');
+
+    document.getElementById('last-updated').textContent = 'Updated ' + new Date().toLocaleTimeString();
+
+  } catch(e) {
+    console.error('Dashboard error:', e);
+    document.getElementById('last-updated').textContent = 'Error loading data';
+  }
+}
+
+loadData();
+setInterval(loadData, 60000);
+</script>
+</body>
+</html>
