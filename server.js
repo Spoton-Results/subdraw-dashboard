@@ -18,7 +18,10 @@ async function callGHL(endpoint, method='GET', body=null) {
   };
   if (body) opts.body = JSON.stringify(body);
   const res = await fetch('https://services.leadconnectorhq.com' + endpoint, opts);
-  if (!res.ok) throw new Error('GHL ' + res.status + ' ' + endpoint);
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error('GHL ' + res.status + ' ' + endpoint + ' — ' + errText.substring(0, 200));
+  }
   return res.json();
 }
 const ghl = callGHL; // alias used by upload/scrape endpoints
@@ -804,7 +807,11 @@ app.post('/api/upload-csv', upload.single('file'), async (req, res) => {
       if (p.website)    contactPayload.website    = p.website;
       if (p.city)       contactPayload.city       = p.city;
       if (p.state)      contactPayload.state      = p.state;
-      const contactRes = await ghl('/contacts/', 'POST', contactPayload);
+      const contactRes = await ghl('/contacts/', 'POST', contactPayload).catch(e => {
+        console.error('[Upload] GHL error for', p.company, ':', e.message);
+        console.error('[Upload] Payload was:', JSON.stringify(contactPayload));
+        throw e;
+      });
 
       const contactId = contactRes.contact?.id;
       if (contactId) {
