@@ -67,7 +67,7 @@ app.get(['/api/dashboard', '/api/data'], async (req, res) => {
     revenue: { mrr: 0, arr: 0, new_signups: 0, cancellations: 0, failed_payments: 0 },
     coo: [],
     services: [],
-    health: { ghl: false, instantly: false, stripe: false }
+    health: { ghl: false, instantly: false, stripe: false, anthropic: !!process.env.ANTHROPIC_API_KEY, apollo: !!process.env.APOLLO_API_KEY }
   };
 
   // GHL pipeline counts
