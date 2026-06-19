@@ -588,6 +588,74 @@ Return [] if no GC companies found. Never include specialty-only trades.`
 });
 
 
+
+// ── VOICE AI CALL WEBHOOK ──────────────────────────────────────────────────
+// Receives post-call data from GHL Voice AI after every outbound call
+// Logs transcript, outcome, and sentiment to Live Activity feed
+
+app.post('/webhook/voice', (req, res) => {
+  res.sendStatus(200);
+  const body = req.body || {};
+
+  const contact = body.contact_name || body.contactName || 'Unknown';
+  const phone = body.phone || body.to || '';
+  const duration = body.call_duration || body.duration || 0;
+  const transcript = body.transcript || body.call_transcript || '';
+  const outcome = body.outcome || body.call_outcome || 'unknown';
+  const agentId = body.agent_id || '';
+
+  // Detect outcome from transcript if not explicitly set
+  const lower = transcript.toLowerCase();
+  let detectedOutcome = outcome;
+  let alertLevel = 'normal';
+
+  if (lower.includes('send') && lower.includes('link') || lower.includes('yes') || lower.includes('interested')) {
+    detectedOutcome = 'interested';
+    alertLevel = 'hot';
+  } else if (lower.includes('not interested') || lower.includes('stop calling') || lower.includes('remove')) {
+    detectedOutcome = 'not_interested';
+    alertLevel = 'critical';
+  } else if (lower.includes('call back') || lower.includes('not now') || lower.includes('later')) {
+    detectedOutcome = 'callback_requested';
+  } else if (lower.includes('voicemail') || lower.includes('no answer')) {
+    detectedOutcome = 'no_answer';
+  }
+
+  console.log('[Voice] Call completed:', contact, '| Outcome:', detectedOutcome, '| Duration:', duration + 's');
+
+  // Log to activity feed
+  pushEvent('ghl', 'voice_call', {
+    contact,
+    phone,
+    outcome: detectedOutcome,
+    duration: duration + 's',
+    transcript: transcript.substring(0, 200)
+  });
+
+  // Fire alert for hot outcomes
+  if (alertLevel === 'hot') {
+    broadcastAlert({
+      level: 'hot',
+      title: '🔥 Voice AI — ' + contact + ' is interested!',
+      body: 'Call duration: ' + duration + 's — Demo link sent via SMS'
+    });
+  }
+
+  if (alertLevel === 'critical') {
+    broadcastAlert({
+      level: 'critical',
+      title: '🚨 Voice AI — ' + contact + ' said not interested',
+      body: 'Tagged do-not-contact automatically'
+    });
+    // Auto tag in GHL if we have contact ID
+    if (body.contact_id || body.contactId) {
+      callGHL('/contacts/' + (body.contact_id || body.contactId) + '/tags', 'POST', {
+        tags: ['voice-not-interested', 'do-not-contact']
+      }).catch(() => {});
+    }
+  }
+});
+
 // ── SMS REPLY POLLER ───────────────────────────────────────────────────────
 // Polls GHL conversations every 2 minutes for inbound SMS replies
 // Fires instant alerts on STOP or hot replies
