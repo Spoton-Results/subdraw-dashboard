@@ -134,7 +134,7 @@ app.get(['/api/dashboard', '/api/data'], async (req, res) => {
   // Instantly campaign
   try {
     const campaignId = process.env.INSTANTLY_CAMPAIGN_ID || 'bb1d4655-8d06-4218-89d4-ec196bc8ca81';
-    const analyticsRaw = await callInstantly('/campaigns/analytics?id=' + campaignId);
+    const analyticsRaw = await callInstantly('/campaigns/analytics?campaign_id=' + campaignId);
     const analytics = Array.isArray(analyticsRaw) ? (analyticsRaw[0] || {}) : analyticsRaw;
     const sent = analytics.emails_sent_count || 0;
     const opens = analytics.open_count || 0;
