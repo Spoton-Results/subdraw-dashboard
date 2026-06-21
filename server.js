@@ -244,10 +244,34 @@ app.post('/webhook/ghl', (req, res) => {
   const body = req.body || {};
   const type = body.type || body.event || 'unknown';
   const msgBody = body.body || body.message || '';
-  const contactName = body.contact?.name || body.contactName || 'Unknown';
+  // Extract contact name from multiple possible payload shapes
+  // Agent events send: { type, source, state, city, company, pushed }
+  // GHL events send: { contact: { name }, contactName }
+  const contactName = body.contact?.name 
+    || body.contactName 
+    || body.contact_name
+    || body.firstName && body.lastName ? `${body.firstName || ''} ${body.lastName || ''}`.trim() : null
+    || body.name
+    || body.company
+    || body.organization_name
+    || (body.city && body.state ? `${body.city}, ${body.state}` : null)
+    || 'Unknown';
   
   // Parse meaningful events
-  if (type.includes('ContactCreate') || type.includes('contact.create')) {
+  if (type === 'prospect_found' || type.includes('prospect_found')) {
+    // Agent 01 sends: { type, source, state, city, pushed, found }
+    const state = body.state || '';
+    const city = body.city || '';
+    const pushed = body.pushed || body.count || 1;
+    pushEvent('ghl', 'prospect_found', { 
+      contact: city && state ? `${pushed} GCs — ${city}, ${state}` : `${pushed} GC prospect(s)`,
+      state, 
+      city,
+      pushed,
+      source: body.source || 'agent'
+    });
+
+  } else if (type.includes('ContactCreate') || type.includes('contact.create')) {
     pushEvent('ghl', 'new_lead', { name: body.contact?.name || body.firstName, company: body.contact?.companyName });
 
   } else if (type.includes('SMS') || type.includes('sms') || body.messageType === 'TYPE_SMS') {
@@ -671,8 +695,8 @@ async function pollSMSReplies() {
   try {
     const locId = process.env.GHL_LOCATION_ID || 'oe1TpmlDynQGFNdYLkaK';
     
-    // Get recent conversations
-    const data = await callGHL('/conversations/?locationId=' + locId + '&limit=20&sort=desc&sortBy=last_message_date');
+    // Get recent conversations via correct v2 search endpoint
+    const data = await callGHL('/conversations/search?locationId=' + locId + '&limit=20&sortBy=last_message_date&sort=desc', 'GET');
     const convos = data.conversations || [];
 
     for (const convo of convos) {
