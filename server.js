@@ -220,6 +220,9 @@ app.listen(port, () => console.log('SubDraw Dashboard running on port ' + port))
 const liveEvents = []; // Ring buffer of last 50 events
 const MAX_EVENTS = 50;
 
+// SMS blast tracking
+const smsStats = { sent: 0, failed: 0, skipped: 0, lastBlast: null, inProgress: false };
+
 function pushEvent(source, type, data) {
   const event = { ts: new Date().toISOString(), source, type, data };
   liveEvents.unshift(event);
@@ -258,7 +261,27 @@ app.post('/webhook/ghl', (req, res) => {
     || 'Unknown';
   
   // Parse meaningful events
-  if (type === 'prospect_found' || type.includes('prospect_found')) {
+  if (type === 'sms_blast_start') {
+    smsStats.inProgress = true;
+    smsStats.lastBlast = new Date().toISOString();
+    pushEvent('agent', 'sms_blast_start', { contact: `SMS blast started — tag: ${body.tag || 'gc-prospect'}, cap: ${body.cap || 0}` });
+
+  } else if (type === 'sms_blast_complete') {
+    smsStats.sent += (body.sent || 0);
+    smsStats.failed += (body.failed || 0);
+    smsStats.skipped += (body.skipped || 0);
+    smsStats.inProgress = false;
+    pushEvent('agent', 'sms_blast_complete', {
+      contact: `✅ Blast done — ${body.sent} sent · ${body.failed} failed · ${body.skipped} skipped`
+    });
+
+  } else if (type === 'sms_sent') {
+    smsStats.sent++;
+    pushEvent('agent', 'sms_sent', {
+      contact: `SMS → ${body.contact || ''} · ${body.company || ''} · ${body.state || ''}`
+    });
+
+  } else if (type === 'prospect_found' || type.includes('prospect_found')) {
     // Agent 01 sends: { type, source, state, city, pushed, found }
     const state = body.state || '';
     const city = body.city || '';
@@ -396,6 +419,11 @@ app.get('/api/events/recent', (req, res) => {
 
 
 
+
+// ── SMS STATS ENDPOINT ─────────────────────────────────────────────────────
+app.get('/api/sms-stats', (req, res) => {
+  res.json({ ...smsStats, timestamp: new Date().toISOString() });
+});
 
 // ── SCRAPY TRIGGER ─────────────────────────────────────────────────────────
 // Triggers Scrapy spider on the scraper service

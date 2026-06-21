@@ -924,6 +924,9 @@ function evColor(type){
 
 function evText(ev){
   const d=ev.data||{};
+  if(ev.type==='sms_sent')return`📱 ${d.contact||'SMS sent'}`;
+  if(ev.type==='sms_blast_start')return`🚀 SMS blast started · ${d.contact||''}`;
+  if(ev.type==='sms_blast_complete')return`✅ ${d.contact||'SMS blast complete'}`;
   if(ev.type==='prospect_found')return`${d.contact||'New GCs found'} · ${ev.source}`;
   if(ev.type==='HOT_REPLY')return`🔥 Hot reply — ${d.contact||''}: "${(d.message||'').substring(0,60)}"`;
   if(ev.type==='CRITICAL_STOP')return`🚨 STOP — ${d.contact||''} · Tagged do-not-contact`;
@@ -1052,6 +1055,19 @@ async function load(){
     ].map(c=>`<div class="cstat"><span class="cstat-l">${c.l}</span><span class="hdot ${c.ok?'hok':'herr'}" style="display:inline-block;margin-top:2px"></span></div>`).join('');
 
     document.getElementById('clk').textContent='Updated '+new Date().toLocaleTimeString();
+
+    // Fetch SMS blast stats
+    try {
+      const sr = await fetch('/api/sms-stats');
+      const ss = await sr.json();
+      const smsTot = document.getElementById('sms-total');
+      const smsReplied = document.getElementById('sms-replied');
+      if (smsTot) smsTot.textContent = ss.sent.toLocaleString();
+      if (smsReplied) smsReplied.textContent = ss.inProgress ? 'Sending...' : (ss.failed > 0 ? ss.failed+' failed' : '0');
+      // Update command strip SMS count
+      const csSms = document.getElementById('cs-sms');
+      if (csSms) csSms.textContent = ss.sent.toLocaleString();
+    } catch(e) {}
   }catch(e){
     document.getElementById('clk').textContent='Error: '+e.message;
     console.error(e);
