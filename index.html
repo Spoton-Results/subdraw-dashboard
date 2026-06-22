@@ -353,6 +353,9 @@ tr:hover td{background:var(--s2)}
 
     <div class="sb-hr"></div>
     <div class="sb-grp">Tools</div>
+    <button class="sb-btn" onclick="nav('blast',this)" data-tip="Fire SMS">
+      <span class="sb-ico">📨</span><span class="sb-label">Fire SMS</span>
+    </button>
     <button class="sb-btn" onclick="nav('hunter',this)" data-tip="Email Finder">
       <span class="sb-ico">🔍</span><span class="sb-lbl">Email Finder</span>
     </button>
@@ -673,6 +676,20 @@ tr:hover td{background:var(--s2)}
     </div>
 
     <!-- HUNTER -->
+    <div class="view" id="v-blast">
+      <div class="card" style="padding:20px">
+        <div style="font-size:14px;font-weight:700;color:var(--teal);margin-bottom:6px">🚀 Fire SMS — Immediate Outreach</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:18px">Sends one personalized SMS to every unsent lead in GHL right now, regardless of prime window schedule. Each contact gets exactly one text.</div>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <button class="tool-btn" onclick="fireSMS()" id="blast-btn">🔥 Send SMS to All Unsent Leads →</button>
+          <span id="blast-count" style="font-size:11px;color:var(--muted)"></span>
+        </div>
+        <div id="blast-status" style="display:none;margin-top:14px" class="card">
+          <div id="blast-log" style="padding:14px;font-size:12px;font-family:'JetBrains Mono',monospace;color:var(--teal);line-height:1.8"></div>
+        </div>
+      </div>
+    </div>
+
     <div class="view" id="v-hunter">
       <div class="card">
         <div class="card-head"><span class="card-title">Hunter Email Finder</span></div>
@@ -1140,7 +1157,32 @@ function handleFile(file){
     const delim=lines[0].includes('\t')?'\t':',';
     const headers=lines[0].split(delim).map(h=>h.replace(/^["']|["']$/g,'').trim());
     const rows=lines.slice(1).map(line=>{const vals=line.split(delim).map(v=>v.replace(/^["']|["']$/g,'').trim());const row={};headers.forEach((h,i)=>{if(vals[i])row[h]=vals[i];});return row;});
-    document.getElementById('upload-preview').style.display='block';
+    async function fireSMS(){
+  const btn=document.getElementById('blast-btn');
+  const status=document.getElementById('blast-status');
+  const log=document.getElementById('blast-log');
+  const count=document.getElementById('blast-count');
+  btn.disabled=true;
+  btn.textContent='Sending...';
+  status.style.display='block';
+  log.textContent='Triggering SMS blast to all unsent leads...';
+  try {
+    const r=await fetch('/api/trigger-sms',{method:'POST'});
+    const d=await r.json();
+    if(d.ok){
+      log.textContent='✅ SMS blast triggered — check logs for delivery status.\n\nAgent 39 is sending to all contacts without sms-sent tag.\nAgent 38 will handle all replies automatically.';
+      count.textContent='Sent successfully';
+    } else {
+      log.textContent='⚠️ ' + (d.error || 'Unknown error');
+    }
+  } catch(e) {
+    log.textContent='❌ Error: ' + e.message;
+  }
+  btn.disabled=false;
+  btn.textContent='🔥 Send SMS to All Unsent Leads →';
+}
+
+document.getElementById('upload-preview').style.display='block';
     document.getElementById('preview-title').textContent=file.name+' — '+rows.length+' rows';
     const show=rows.slice(0,5);
     document.getElementById('preview-table').innerHTML='<table><thead><tr>'+headers.map(h=>'<th>'+h+'</th>').join('')+'</tr></thead><tbody>'+show.map(row=>'<tr>'+headers.map(h=>'<td>'+(row[h]||'—')+'</td>').join('')+'</tr>').join('')+'</tbody></table>'+(rows.length>5?`<div style="padding:8px 12px;font-size:11px;color:var(--muted)">+ ${rows.length-5} more rows</div>`:'');
