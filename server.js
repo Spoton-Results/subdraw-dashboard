@@ -420,6 +420,81 @@ app.get('/api/events/recent', (req, res) => {
 
 
 
+
+// ── FIRE SMS — immediate blast to all unsent leads ─────────────────────────
+// Calls Agent 39 directly, bypasses prime window check
+app.post('/api/trigger-sms', async (req, res) => {
+  res.json({ ok: true, message: 'SMS blast triggered — check logs' });
+
+  // Run Agent 39 immediately, ignoring prime window
+  try {
+    const { callGHL: ghlCall } = require('./utils/helpers') || {};
+    const fetch2 = (await import('node-fetch')).default;
+
+    const GHL_LOCATION = process.env.GHL_LOCATION_ID || 'oe1TpmlDynQGFNdYLkaK';
+    const FROM_NUMBER  = process.env.FROM_NUMBER || '+14352911877';
+
+    const SMS_MESSAGE = (firstName) =>
+      `Hey ${firstName || 'there'}, quick question — are your subs billing you accurately on every draw? Most GCs lose $8-15K per job without knowing it. Check it free: subdraw.com/login –Shawn. Reply STOP to opt out.`;
+
+    function isRealPhone(phone) {
+      if (!phone) return false;
+      const digits = phone.replace(/\D/g, '');
+      if (digits.length !== 10 && !(digits.length === 11 && digits[0] === '1')) return false;
+      const area = digits.length === 11 ? digits.substring(1,4) : digits.substring(0,3);
+      return area !== '555';
+    }
+
+    // Fetch unsent leads
+    let contacts = [], startAfter = null, startAfterId = null;
+    while (true) {
+      let url = `/contacts/?locationId=${GHL_LOCATION}&limit=100&query=gc-prospect`;
+      if (startAfter)   url += `&startAfter=${startAfter}`;
+      if (startAfterId) url += `&startAfterId=${startAfterId}`;
+      const data = await callGHL(url);
+      const batch = (data.contacts || []).filter(c => {
+        const tags = c.tags || [];
+        return !tags.includes('sms-sent') && !tags.includes('do-not-contact') &&
+               !tags.includes('sms-unsubscribed') && !c.dnd && isRealPhone(c.phone);
+      });
+      contacts.push(...batch);
+      if (!data.meta?.nextPage || contacts.length >= 500) break;
+      startAfter   = data.meta.startAfter;
+      startAfterId = data.meta.startAfterId;
+      await new Promise(r => setTimeout(r, 300));
+    }
+
+    console.log(`[Trigger SMS] ${contacts.length} unsent leads found`);
+    const sentPhones = new Set();
+    let sent = 0;
+
+    for (const c of contacts) {
+      const norm = (c.phone || '').replace(/\D/g, '');
+      if (sentPhones.has(norm)) continue;
+      try {
+        await callGHL('/conversations/messages', 'POST', {
+          type: 'SMS',
+          contactId: c.id,
+          fromNumber: FROM_NUMBER,
+          toNumber: c.phone,
+          message: SMS_MESSAGE(c.firstNameRaw || c.firstName)
+        });
+        await callGHL(`/contacts/${c.id}/tags`, 'POST', { tags: ['sms-sent'] });
+        sentPhones.add(norm);
+        sent++;
+        console.log(`[Trigger SMS] ✅ ${c.firstNameRaw || c.firstName} · ${c.companyName}`);
+        await new Promise(r => setTimeout(r, 1500));
+      } catch(e) {
+        console.error(`[Trigger SMS] ❌ ${c.phone}: ${e.message}`);
+      }
+    }
+    console.log(`[Trigger SMS] Done — sent: ${sent}`);
+    pushEvent('agent', 'sms_blast_complete', { contact: `Trigger SMS done — ${sent} sent` });
+  } catch(e) {
+    console.error('[Trigger SMS] Error:', e.message);
+  }
+});
+
 // ── SMS STATS ENDPOINT ─────────────────────────────────────────────────────
 app.get('/api/sms-stats', (req, res) => {
   res.json({ ...smsStats, timestamp: new Date().toISOString() });
