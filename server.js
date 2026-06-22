@@ -734,7 +734,7 @@ async function pollSMSReplies() {
 
       // Get messages for this conversation
       const msgData = await callGHL('/conversations/' + convo.id + '/messages?limit=5');
-      const messages = msgData.messages || [];
+      const messages = Array.isArray(msgData.messages) ? msgData.messages : (msgData.messages?.messages || []);
 
       for (const msg of messages) {
         if (alertedMessages.has(msg.id)) continue;
