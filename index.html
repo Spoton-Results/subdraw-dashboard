@@ -239,6 +239,10 @@ tr:hover td{background:var(--s2)}
 .tool-btn{background:var(--teal);color:#000;border:none;border-radius:6px;padding:9px 20px;font-weight:700;font-size:12px;font-family:inherit;cursor:pointer;transition:filter .15s}
 .tool-btn:hover{filter:brightness(1.1)}
 .tool-btn:disabled{opacity:.5;cursor:not-allowed}
+.pause-btn{display:flex;align-items:center;gap:8px;padding:8px 16px;border-radius:7px;border:none;font-weight:700;font-size:12px;font-family:inherit;cursor:pointer;transition:all .2s}
+.pause-btn.running{background:rgba(255,80,80,.15);border:1px solid rgba(255,80,80,.4);color:#ff5050}
+.pause-btn.paused{background:rgba(0,212,168,.15);border:1px solid var(--teal);color:var(--teal)}
+.pause-btn:hover{filter:brightness(1.2)}
 .drop-zone{border:2px dashed var(--border2);border-radius:8px;padding:28px;text-align:center;cursor:pointer;transition:all .2s}
 .drop-zone:hover{border-color:var(--teal);background:var(--teal-dim)}
 
@@ -308,6 +312,7 @@ tr:hover td{background:var(--s2)}
   <div class="tb-right">
     <span class="clk" id="clk">Loading...</span>
     <button class="tbtn" onclick="load()">↻ Refresh</button>
+    <button class="pause-btn running" id="pause-toggle" onclick="togglePause()"><span id="pause-icon">⏸</span> <span id="pause-label">Pause System</span></button>
     <button class="tbtn primary" onclick="nav('coo',document.querySelector('.sb-btn'))">War Room</button>
   </div>
 </div>
@@ -353,9 +358,6 @@ tr:hover td{background:var(--s2)}
 
     <div class="sb-hr"></div>
     <div class="sb-grp">Tools</div>
-    <button class="sb-btn" onclick="nav('blast',this)" data-tip="Fire SMS">
-      <span class="sb-ico">📨</span><span class="sb-label">Fire SMS</span>
-    </button>
     <button class="sb-btn" onclick="nav('hunter',this)" data-tip="Email Finder">
       <span class="sb-ico">🔍</span><span class="sb-lbl">Email Finder</span>
     </button>
@@ -676,20 +678,6 @@ tr:hover td{background:var(--s2)}
     </div>
 
     <!-- HUNTER -->
-    <div class="view" id="v-blast">
-      <div class="card" style="padding:20px">
-        <div style="font-size:14px;font-weight:700;color:var(--teal);margin-bottom:6px">🚀 Fire SMS — Immediate Outreach</div>
-        <div style="font-size:12px;color:var(--muted);margin-bottom:18px">Sends one personalized SMS to every unsent lead in GHL right now, regardless of prime window schedule. Each contact gets exactly one text.</div>
-        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-          <button class="tool-btn" onclick="fireSMS()" id="blast-btn">🔥 Send SMS to All Unsent Leads →</button>
-          <span id="blast-count" style="font-size:11px;color:var(--muted)"></span>
-        </div>
-        <div id="blast-status" style="display:none;margin-top:14px" class="card">
-          <div id="blast-log" style="padding:14px;font-size:12px;font-family:'JetBrains Mono',monospace;color:var(--teal);line-height:1.8"></div>
-        </div>
-      </div>
-    </div>
-
     <div class="view" id="v-hunter">
       <div class="card">
         <div class="card-head"><span class="card-title">Hunter Email Finder</span></div>
@@ -1157,32 +1145,7 @@ function handleFile(file){
     const delim=lines[0].includes('\t')?'\t':',';
     const headers=lines[0].split(delim).map(h=>h.replace(/^["']|["']$/g,'').trim());
     const rows=lines.slice(1).map(line=>{const vals=line.split(delim).map(v=>v.replace(/^["']|["']$/g,'').trim());const row={};headers.forEach((h,i)=>{if(vals[i])row[h]=vals[i];});return row;});
-    async function fireSMS(){
-  const btn=document.getElementById('blast-btn');
-  const status=document.getElementById('blast-status');
-  const log=document.getElementById('blast-log');
-  const count=document.getElementById('blast-count');
-  btn.disabled=true;
-  btn.textContent='Sending...';
-  status.style.display='block';
-  log.textContent='Triggering SMS blast to all unsent leads...';
-  try {
-    const r=await fetch('/api/trigger-sms',{method:'POST'});
-    const d=await r.json();
-    if(d.ok){
-      log.textContent='✅ SMS blast triggered — check logs for delivery status.\n\nAgent 39 is sending to all contacts without sms-sent tag.\nAgent 38 will handle all replies automatically.';
-      count.textContent='Sent successfully';
-    } else {
-      log.textContent='⚠️ ' + (d.error || 'Unknown error');
-    }
-  } catch(e) {
-    log.textContent='❌ Error: ' + e.message;
-  }
-  btn.disabled=false;
-  btn.textContent='🔥 Send SMS to All Unsent Leads →';
-}
-
-document.getElementById('upload-preview').style.display='block';
+    document.getElementById('upload-preview').style.display='block';
     document.getElementById('preview-title').textContent=file.name+' — '+rows.length+' rows';
     const show=rows.slice(0,5);
     document.getElementById('preview-table').innerHTML='<table><thead><tr>'+headers.map(h=>'<th>'+h+'</th>').join('')+'</tr></thead><tbody>'+show.map(row=>'<tr>'+headers.map(h=>'<td>'+(row[h]||'—')+'</td>').join('')+'</tr>').join('')+'</tbody></table>'+(rows.length>5?`<div style="padding:8px 12px;font-size:11px;color:var(--muted)">+ ${rows.length-5} more rows</div>`:'');
@@ -1303,6 +1266,53 @@ setInterval(load,3*60*1000);
 renderAgents('all');
 load();
 connectSSE();
+
+// ── SYSTEM PAUSE ──────────────────────────────────────────────────────────────
+let systemPaused = false;
+
+async function checkPauseStatus() {
+  try {
+    const r = await fetch('/api/pause-status');
+    const d = await r.json();
+    systemPaused = d.paused;
+    updatePauseBtn();
+  } catch(e) {}
+}
+
+function updatePauseBtn() {
+  const btn = document.getElementById('pause-toggle');
+  const icon = document.getElementById('pause-icon');
+  const label = document.getElementById('pause-label');
+  if (!btn) return;
+  if (systemPaused) {
+    btn.className = 'pause-btn paused';
+    icon.textContent = '▶';
+    label.textContent = 'Resume System';
+  } else {
+    btn.className = 'pause-btn running';
+    icon.textContent = '⏸';
+    label.textContent = 'Pause System';
+  }
+}
+
+async function togglePause() {
+  const btn = document.getElementById('pause-toggle');
+  btn.disabled = true;
+  try {
+    const endpoint = systemPaused ? '/api/resume' : '/api/pause';
+    const r = await fetch(endpoint, { method: 'POST' });
+    const d = await r.json();
+    systemPaused = d.paused;
+    updatePauseBtn();
+    const label = document.getElementById('pause-label');
+    label.textContent = systemPaused ? '⏸ Paused!' : '▶ Resumed!';
+    setTimeout(updatePauseBtn, 1500);
+  } catch(e) { console.error('Toggle pause failed:', e); }
+  btn.disabled = false;
+}
+
+checkPauseStatus();
+setInterval(checkPauseStatus, 30000);
 </script>
 </body>
 </html>
