@@ -247,16 +247,19 @@ function detectAlertLevel(messageBody) {
 // ── WEBHOOK SIGNATURE VALIDATION ─────────────────────────────────────────────
 function validateGHLWebhook(req) {
   const secret = process.env.GHL_WEBHOOK_SECRET;
-  if (!secret) return true; // no secret set → allow (open) — warns in logs
-  const sig = req.headers['x-ghl-signature'] || req.headers['x-hub-signature-256'] || '';
-  if (!sig) {
-    console.warn('[Webhook] GHL request missing signature header — rejected');
+  if (!secret) return true; // no secret set → allow
+  // GHL doesn't support custom headers — validate via query param ?secret=
+  const provided = req.query.secret || '';
+  if (!provided) {
+    console.warn('[Webhook] GHL request missing ?secret= param — rejected');
     return false;
   }
-  const expected = 'sha256=' + crypto.createHmac('sha256', secret)
-    .update(JSON.stringify(req.body))
-    .digest('hex');
-  return crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected));
+  // Constant-time compare
+  try {
+    const a = Buffer.from(provided.padEnd(secret.length));
+    const b = Buffer.from(secret.padEnd(provided.length));
+    return provided.length === secret.length && crypto.timingSafeEqual(a, b);
+  } catch(e) { return false; }
 }
 
 function validateInstantlyWebhook(req) {
