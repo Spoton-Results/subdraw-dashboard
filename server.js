@@ -1,5 +1,6 @@
 require('dotenv').config();
 const express = require('express');
+const crypto = require('crypto');
 const app = express();
 const port = process.env.PORT || 3000;
 
@@ -242,7 +243,40 @@ function detectAlertLevel(messageBody) {
 }
 
 // GHL Webhook — fires on contact updates, SMS, pipeline changes, opportunities
+
+// ── WEBHOOK SIGNATURE VALIDATION ─────────────────────────────────────────────
+function validateGHLWebhook(req) {
+  const secret = process.env.GHL_WEBHOOK_SECRET;
+  if (!secret) return true; // no secret set → allow (open) — warns in logs
+  const sig = req.headers['x-ghl-signature'] || req.headers['x-hub-signature-256'] || '';
+  if (!sig) {
+    console.warn('[Webhook] GHL request missing signature header — rejected');
+    return false;
+  }
+  const expected = 'sha256=' + crypto.createHmac('sha256', secret)
+    .update(JSON.stringify(req.body))
+    .digest('hex');
+  return crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected));
+}
+
+function validateInstantlyWebhook(req) {
+  const secret = process.env.INSTANTLY_WEBHOOK_SECRET;
+  if (!secret) return true;
+  // Instantly signs with X-Instantly-Signature header using HMAC-SHA256
+  const sig = req.headers['x-instantly-signature'] || req.headers['x-webhook-secret'] || '';
+  if (!sig) {
+    console.warn('[Webhook] Instantly request missing signature header — rejected');
+    return false;
+  }
+  const expected = crypto.createHmac('sha256', secret)
+    .update(JSON.stringify(req.body))
+    .digest('hex');
+  return crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected));
+}
+
 app.post('/webhook/ghl', (req, res) => {
+  // Validate GHL signature if secret is set
+  if (!validateGHLWebhook(req)) return res.sendStatus(401);
   res.sendStatus(200); // Acknowledge immediately
   const body = req.body || {};
   const type = body.type || body.event || 'unknown';
@@ -359,6 +393,8 @@ function broadcastAlert(alert) {
 
 // Instantly Webhook — fires on email opens, replies, bounces, campaign events
 app.post('/webhook/instantly', (req, res) => {
+  // Validate Instantly signature if secret is set
+  if (!validateInstantlyWebhook(req)) return res.sendStatus(401);
   res.sendStatus(200);
   const body = req.body || {};
   const event = body.event_type || body.type || 'unknown';
