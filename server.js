@@ -445,8 +445,89 @@ app.post('/api/resume', (req, res) => {
 });
 
 // ── SMS STATS ENDPOINT ─────────────────────────────────────────────────────
-app.get('/api/sms-stats', (req, res) => {
-  res.json({ ...smsStats, timestamp: new Date().toISOString() });
+app.get('/api/sms-stats', async (req, res) => {
+  // Always query GHL for real count — survives restarts
+  try {
+    const locationId = process.env.GHL_LOCATION_ID || 'oe1TpmlDynQGFNdYLkaK';
+    // Count contacts with sms-sent tag (the dedup tag Agent 39 applies)
+    const [r1, r2] = await Promise.all([
+      callGHL('/contacts/?locationId=' + locationId + '&query=sms-sent&limit=1').catch(() => null),
+      callGHL('/contacts/?locationId=' + locationId + '&query=sms-day1&limit=1').catch(() => null)
+    ]);
+    const totalSent = (r1?.meta?.total || 0) + (r2?.meta?.total || 0);
+    // Count replied contacts (sms-replied tag)
+    const r3 = await callGHL('/contacts/?locationId=' + locationId + '&query=sms-replied&limit=1').catch(() => null);
+    const totalReplied = r3?.meta?.total || 0;
+    res.json({
+      sent: totalSent || smsStats.sent,
+      replied: totalReplied,
+      failed: smsStats.failed,
+      skipped: smsStats.skipped,
+      lastBlast: smsStats.lastBlast,
+      inProgress: smsStats.inProgress,
+      source: 'ghl_live',
+      timestamp: new Date().toISOString()
+    });
+  } catch(e) {
+    // Fallback to in-memory if GHL is down
+    res.json({ ...smsStats, replied: 0, source: 'memory_fallback', timestamp: new Date().toISOString() });
+  }
+});
+
+
+// ── AGENT HEARTBEAT STORE ────────────────────────────────────────────────────
+// Agents POST here every tick. Dashboard reads last-seen timestamps.
+const agentHeartbeats = {}; // { agentId: { ts, status, detail } }
+
+app.post('/api/agent-heartbeat', (req, res) => {
+  const { agent, status, detail } = req.body || {};
+  if (!agent) return res.status(400).json({ error: 'agent required' });
+  agentHeartbeats[String(agent)] = {
+    ts: new Date().toISOString(),
+    status: status || 'ok',
+    detail: detail || ''
+  };
+  res.json({ ok: true });
+});
+
+app.get('/api/agent-heartbeats', (req, res) => {
+  const now = Date.now();
+  const result = {};
+  Object.entries(agentHeartbeats).forEach(([id, h]) => {
+    const ageMs = now - new Date(h.ts).getTime();
+    result[id] = {
+      ...h,
+      ageSeconds: Math.round(ageMs / 1000),
+      alive: ageMs < 10 * 60 * 1000  // alive = pinged within 10 min
+    };
+  });
+  res.json({ agents: result, ts: new Date().toISOString() });
+});
+
+
+// ── INSTANTLY ACCOUNT HEALTH ENDPOINT ───────────────────────────────────────
+// Returns health, warmup, daily limits for all sending accounts
+app.get('/api/email-accounts', async (req, res) => {
+  try {
+    const data = await callInstantly('/accounts?limit=20');
+    const accounts = (data.items || []).map(a => ({
+      email: a.email,
+      firstName: a.first_name,
+      lastName: a.last_name,
+      status: a.status === 1 ? 'active' : 'paused',
+      warmupScore: a.stat_warmup_score || 0,
+      warmupStatus: a.warmup_status === 1 ? 'on' : 'off',
+      warmupLimit: a.warmup?.limit || 0,
+      dailyLimit: a.daily_limit || 0,
+      sendingGap: a.sending_gap || 0,
+      todaySent: a.stat_today_sent || 0,
+      provider: a.provider_code === 2 ? 'Google' : 'SMTP',
+      createdAt: a.timestamp_created
+    }));
+    res.json({ accounts, ts: new Date().toISOString() });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // ── SCRAPY TRIGGER ─────────────────────────────────────────────────────────
