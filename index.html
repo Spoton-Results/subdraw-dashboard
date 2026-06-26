@@ -616,6 +616,10 @@ tr:hover td{background:var(--s2)}
         <div id="camp-st"></div>
       </div>
       <div class="card">
+        <div class="card-head"><span class="card-title">Sending accounts</span><span class="card-meta" id="acct-ts" style="font-size:10px"></span></div>
+        <div id="email-accounts-tbl"><div class="empty">Loading...</div></div>
+      </div>
+      <div class="card">
         <div class="card-head"><span class="card-title">Follow-ups scheduled · Agent 32</span></div>
         <div id="fup-tbl"><div class="empty">Agent 32 schedules follow-ups when a GC replies "not now."</div></div>
       </div>
@@ -898,7 +902,7 @@ function renderAgents(filter){
         <td class="td-mono" style="color:var(--hint);width:32px">${a.id}</td>
         <td><div class="td-name">${a.name}</div><div class="td-sub">${a.svc}</div></td>
         <td class="td-mono" style="color:var(--muted)">${a.sch}</td>
-        <td>${a.st==='running'?'<span class="bdg bdg-run">RUNNING</span>':a.st==='on-trigger'?'<span class="bdg bdg-trig">TRIGGER</span>':'<span class="bdg bdg-sched">SCHEDULED</span>'}</td>
+        <td>${(()=>{const h=agentHeartbeatData[String(a.id)];if(h&&h.alive)return'<span class="bdg bdg-run">ALIVE</span>';if(h&&!h.alive)return'<span class="bdg bdg-err">STALE '+Math.round(h.ageSeconds/60)+'m</span>';return (()=>{const h=agentHeartbeatData[String(a.id)];if(h&&h.alive)return'<span class="bdg bdg-run">ALIVE</span>';if(h&&!h.alive)return'<span class="bdg bdg-err">STALE '+Math.round(h.ageSeconds/60)+'m</span>';return a.st==='running'?'<span class="bdg bdg-run">RUNNING</span>':a.st==='on-trigger'?'<span class="bdg bdg-trig">TRIGGER</span>':'<span class="bdg bdg-sched">SCHEDULED</span>';})();})()}</td>
       </tr>`).join('');
     });
   } else {
@@ -906,7 +910,7 @@ function renderAgents(filter){
       <td class="td-mono" style="color:var(--hint);width:32px">${a.id}</td>
       <td><div class="td-name">${a.name}</div><div class="td-sub">${a.svc}</div></td>
       <td class="td-mono" style="color:var(--muted)">${a.sch}</td>
-      <td>${a.st==='running'?'<span class="bdg bdg-run">RUNNING</span>':a.st==='on-trigger'?'<span class="bdg bdg-trig">TRIGGER</span>':'<span class="bdg bdg-sched">SCHEDULED</span>'}</td>
+      <td>${(()=>{const h=agentHeartbeatData[String(a.id)];if(h&&h.alive)return'<span class="bdg bdg-run">ALIVE</span>';if(h&&!h.alive)return'<span class="bdg bdg-err">STALE '+Math.round(h.ageSeconds/60)+'m</span>';return a.st==='running'?'<span class="bdg bdg-run">RUNNING</span>':a.st==='on-trigger'?'<span class="bdg bdg-trig">TRIGGER</span>':'<span class="bdg bdg-sched">SCHEDULED</span>';})()}</td>
     </tr>`).join('');
   }
   el.innerHTML=html+'</tbody></table>';
@@ -1047,8 +1051,27 @@ async function load(){
         <div class="hrow-name"><span class="hdot ${(D.health||{})[a.k]?'hok':'herr'}"></span>${a.n}</div>
         <div class="hrow-status"><span class="bdg ${(D.health||{})[a.k]?'bdg-ok':'bdg-err'}">${(D.health||{})[a.k]?'Connected':'Error'}</span></div>
       </div>`).join('');
-    document.getElementById('svc-h').innerHTML=['orchestrator','reply-handler','revenue-monitor','daily-briefing','weekly-analyzer','health-monitor','scraper','dashboard'].map(s=>`
-      <div class="cstat"><span class="cstat-l">${s}</span><span class="bdg bdg-run">ONLINE</span></div>`).join('');
+    // Service health is approximate — based on Railway deploy, not real ping
+// Agent heartbeats (Fix 2) give true agent-level liveness
+const aliveAgents = Object.values(agentHeartbeatData).filter(a => a.alive).length;
+const totalHeartbeating = Object.keys(agentHeartbeatData).length;
+document.getElementById('svc-h').innerHTML = [
+  {name:'orchestrator', key:'orchestrator'},
+  {name:'reply-handler', key:'reply-handler'},
+  {name:'revenue-monitor', key:'revenue-monitor'},
+  {name:'daily-briefing', key:'daily-briefing'},
+  {name:'weekly-analyzer', key:'weekly-analyzer'},
+  {name:'health-monitor', key:'health-monitor'},
+  {name:'scraper', key:'scraper'},
+  {name:'dashboard', key:'dashboard'}
+].map(svc => {
+  // dashboard is always alive (we're serving this page)
+  const isAlive = svc.key === 'dashboard' ? true : totalHeartbeating > 0 ? aliveAgents > 0 : null;
+  const badge = isAlive === null ? '<span class="bdg bdg-sched">UNKNOWN</span>' :
+                isAlive ? '<span class="bdg bdg-run">ONLINE</span>' :
+                '<span class="bdg bdg-err">OFFLINE</span>';
+  return `<div class="cstat"><span class="cstat-l">${svc.name}</span>${badge}</div>`;
+}).join('');
     document.getElementById('crit-h').innerHTML=[
       {l:'Env vars loaded',ok:(D.health||{}).anthropic&&(D.health||{}).ghl},
       {l:'Reply handler running',ok:true},
@@ -1068,7 +1091,9 @@ async function load(){
       const smsTot = document.getElementById('sms-total');
       const smsReplied = document.getElementById('sms-replied');
       if (smsTot) smsTot.textContent = ss.sent.toLocaleString();
-      if (smsReplied) smsReplied.textContent = ss.inProgress ? 'Sending...' : (ss.failed > 0 ? ss.failed+' failed' : '0');
+      if (smsReplied) smsReplied.textContent = ss.inProgress ? 'Sending...' : (ss.replied > 0 ? ss.replied+' replied' : (ss.failed > 0 ? ss.failed+' failed' : '0 replies'));
+      const smsSrcEl = document.getElementById('sms-source');
+      if (smsSrcEl) smsSrcEl.textContent = ss.source === 'ghl_live' ? '● GHL live' : '○ cached';
       // Update command strip SMS count
       const csSms = document.getElementById('cs-sms');
       if (csSms) csSms.textContent = ss.sent.toLocaleString();
@@ -1266,6 +1291,59 @@ setInterval(load,3*60*1000);
 renderAgents('all');
 load();
 connectSSE();
+
+// ── EMAIL ACCOUNT HEALTH ────────────────────────────────────────────────────
+async function fetchEmailAccounts() {
+  try {
+    const r = await fetch('/api/email-accounts');
+    const d = await r.json();
+    const accounts = d.accounts || [];
+    const el = document.getElementById('email-accounts-tbl');
+    const tsEl = document.getElementById('acct-ts');
+    if (tsEl) tsEl.textContent = 'Live';
+    if (!el) return;
+    if (!accounts.length) { el.innerHTML = '<div class="empty">No accounts found</div>'; return; }
+    el.innerHTML = '<table><thead><tr><th>Account</th><th>Daily limit</th><th>Gap</th><th>Warmup</th><th>Status</th></tr></thead><tbody>' +
+      accounts.map(a => {
+        const warmupPct = a.warmupScore;
+        const warmupColor = warmupPct >= 80 ? 'var(--green)' : warmupPct >= 50 ? 'var(--amber)' : 'var(--red)';
+        const gapColor = a.sendingGap >= 8 ? 'var(--teal)' : 'var(--amber)';
+        const campaignSlots = a.dailyLimit - a.warmupLimit;
+        return `<tr>
+          <td><div class="td-name">${a.email}</div><div class="td-sub">${a.provider} · ${a.firstName} ${a.lastName}</div></td>
+          <td class="td-mono" style="color:var(--teal)">${a.dailyLimit}/day <span style="color:var(--muted);font-size:10px">(${campaignSlots} for prospects)</span></td>
+          <td class="td-mono" style="color:${gapColor}">${a.sendingGap}min</td>
+          <td><span style="color:${warmupColor};font-size:11px;font-weight:600">${warmupPct}% · ${a.warmupLimit}/day warmup</span></td>
+          <td><span class="bdg ${a.status === 'active' ? 'bdg-run' : 'bdg-err'}">${a.status.toUpperCase()}</span></td>
+        </tr>`;
+      }).join('') + '</tbody></table>';
+  } catch(e) {
+    const el = document.getElementById('email-accounts-tbl');
+    if (el) el.innerHTML = '<div class="empty">Error loading accounts: ' + e.message + '</div>';
+  }
+}
+fetchEmailAccounts();
+setInterval(fetchEmailAccounts, 5 * 60 * 1000); // refresh every 5 min
+
+// ── AGENT HEARTBEAT POLLING ──────────────────────────────────────────────────
+let agentHeartbeatData = {};
+
+async function fetchHeartbeats() {
+  try {
+    const r = await fetch('/api/agent-heartbeats');
+    const d = await r.json();
+    agentHeartbeatData = d.agents || {};
+    // Re-render agent table with live status if agents view is active
+    const agView = document.getElementById('v-agt');
+    if (agView && agView.classList.contains('active')) renderAgents(aF);
+    // Update the alive count in top metrics
+    const aliveCount = Object.values(agentHeartbeatData).filter(a => a.alive).length;
+    const aliveEl = document.getElementById('ag-alive-count');
+    if (aliveEl) aliveEl.textContent = aliveCount;
+  } catch(e) {}
+}
+fetchHeartbeats();
+setInterval(fetchHeartbeats, 60000); // poll every 60s
 
 // ── SYSTEM PAUSE ──────────────────────────────────────────────────────────────
 let systemPaused = false;
