@@ -248,13 +248,12 @@ function detectAlertLevel(messageBody) {
 function validateGHLWebhook(req) {
   const secret = process.env.GHL_WEBHOOK_SECRET;
   if (!secret) return true; // no secret set → allow
-  // GHL doesn't support custom headers — validate via query param ?secret=
-  const provided = req.query.secret || '';
+  // Agents send secret via X-Agent-Secret header in notifyDashboard()
+  const provided = req.headers['x-agent-secret'] || req.query.secret || '';
   if (!provided) {
-    console.warn('[Webhook] GHL request missing ?secret= param — rejected');
+    console.warn('[Webhook] GHL/agent request missing secret — rejected');
     return false;
   }
-  // Constant-time compare
   try {
     const a = Buffer.from(provided.padEnd(secret.length));
     const b = Buffer.from(secret.padEnd(provided.length));
