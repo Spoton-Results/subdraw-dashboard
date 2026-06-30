@@ -194,6 +194,59 @@ app.get(['/api/dashboard', '/api/data'], async (req, res) => {
 // Alias /api/data → /api/dashboard for frontend
 app.get('/api/data', (req, res, next) => { req.url = '/api/dashboard'; next('route'); });
 
+// ─── SpotOn Results — Merchant Services data ───────────────────────────────
+app.get('/api/merchant-data', async (req, res) => {
+  const data = {
+    timestamp: new Date().toISOString(),
+    pipeline: { discovery: 0, first_contact: 0, follow_up: 0, audit_offered: 0, closed: 0 },
+    campaign: { sent: 0, opens: 0, replies: 0, open_rate: 0, reply_rate: 0 },
+    leads_count: 0
+  };
+
+  // Merchant GHL pipeline
+  try {
+    const locationId = process.env.GHL_LOCATION_ID || 'oe1TpmlDynQGFNdYLkaK';
+    const pipelineId = process.env.MERCHANT_GHL_PIPELINE_ID;
+    if (pipelineId) {
+      const opps = await callGHL('/opportunities/search?pipeline_id=' + pipelineId + '&location_id=' + locationId + '&limit=200');
+      const opportunities = opps.opportunities || [];
+      const stageMap = {
+        [process.env.MERCHANT_GHL_STAGE_COLD || 'c7358ebc-2a14-4e36-baff-101d4390bd98']:    'discovery',
+        [process.env.MERCHANT_GHL_STAGE_REPLIED || '7a06742b-7812-47bc-9124-1ce79f0a1fa5']: 'first_contact',
+        '07768fa2-5fe5-4d9f-8495-0d8c826a2161': 'follow_up',
+        'c0ddf425-86c2-4128-ba72-a1a07041b9d6': 'audit_offered',
+        '156baa0a-afe1-4431-ad91-d7f4c3815927': 'audit_offered',
+        '9f51d999-8460-4e44-b520-77847249a41a': 'audit_offered',
+        '205eb8cf-a419-43be-8c5f-386765e57550': 'closed'
+      };
+      opportunities.forEach(o => {
+        const stage = stageMap[o.pipelineStageId] || 'discovery';
+        data.pipeline[stage]++;
+      });
+      data.leads_count = opportunities.length;
+    }
+  } catch(e) { console.error('Merchant GHL error:', e.message); }
+
+  // Merchant Instantly campaign
+  try {
+    const campaignId = process.env.MERCHANT_INSTANTLY_CAMPAIGN_ID || '8b8d1159-ec1c-4982-944d-6dd0be563b50';
+    const analyticsRaw = await callInstantly('/campaigns/analytics?campaign_id=' + campaignId);
+    const analytics = Array.isArray(analyticsRaw) ? (analyticsRaw[0] || {}) : analyticsRaw;
+    const sent = analytics.emails_sent_count || 0;
+    const opens = analytics.open_count || 0;
+    const replies = analytics.reply_count || 0;
+    data.campaign = {
+      sent, opens, replies,
+      open_rate:  sent ? Math.round((opens / sent) * 10000) / 100 : 0,
+      reply_rate: sent ? Math.round((replies / sent) * 10000) / 100 : 0
+    };
+  } catch(e) { console.error('Merchant Instantly error:', e.message); }
+
+  res.json(data);
+});
+// ───────────────────────────────────────────────────────────────────────────
+
+
 // API: Railway service status
 app.get('/api/services', async (req, res) => {
   const services = [

@@ -1006,6 +1006,28 @@ async function load(){
     if(D.coo)renderCOO(D.coo);
     if(D.health)renderHMini(D.health);
 
+  // Load merchant data
+  try {
+    const mr = await fetch('/api/merchant-data');
+    const MD = await mr.json();
+    const mp = MD.pipeline || {};
+    const mc = MD.campaign || {};
+    const mmax = Math.max(mp.discovery||0, mp.first_contact||0, mp.follow_up||0, mp.audit_offered||0, mp.closed||0, 1);
+    const mmap = { d: mp.discovery||0, f: mp.first_contact||0, a: mp.audit_offered||0, fo: mp.follow_up||0, c: mp.closed||0 };
+    Object.entries(mmap).forEach(([k,v]) => {
+      const pn = document.getElementById('mpp-'+k); if(pn) pn.textContent = v || '—';
+      const pb = document.getElementById('mpb-'+k); if(pb) pb.style.width = Math.min(100, Math.round(v/mmax*100))+'%';
+    });
+    const el_sent = document.getElementById('m-sent'); if(el_sent) el_sent.textContent = fm(mc.sent);
+    const el_or   = document.getElementById('m-or');   if(el_or)   el_or.textContent   = pct(mc.open_rate);
+    const el_rep  = document.getElementById('m-rep');  if(el_rep)  el_rep.textContent  = fm(mc.replies);
+    const el_rr   = document.getElementById('m-rr');   if(el_rr)   el_rr.textContent   = pct(mc.reply_rate);
+    const mconv = document.getElementById('m-pipe-conv');
+    const mtot = Object.values(mp).reduce((a,b)=>a+b,0);
+    if(mconv && mtot) mconv.textContent = mtot + ' merchants tracked';
+  } catch(e) { console.error('Merchant data error:', e); }
+
+
     // Revenue
     document.getElementById('rv-mrr').textContent=fmm(rv.mrr);
     document.getElementById('rv-arr').textContent='ARR: '+fmm((rv.arr)||(rv.mrr*12));
